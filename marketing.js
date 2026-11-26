@@ -14,7 +14,14 @@
  *   META_GRAPH_VERSAO versão da Graph API (padrão v23.0)
  *   MKT_URL_PUBLICA   endereço público deste servidor (padrão https://ia.herupusistemas.com.br)
  *
- * Os dados ficam em dados/marketing.json e as imagens em dados/midia/ (fora do Git).
+ * Em vez de colar tokens, dá para conectar pelo botão "Conectar Instagram/Facebook" do painel
+ * (login da Meta). Para isso o .env precisa de META_APP_ID, META_APP_SECRET e, se houver,
+ * META_LOGIN_CONFIG_ID (os mesmos do app da Central), e o endereço
+ *   https://ia.herupusistemas.com.br/mkt/meta/retorno
+ * cadastrado como "URI de redirecionamento OAuth válido" no app da Meta.
+ *
+ * Os dados ficam em dados/marketing.json, a conexão da Meta em dados/meta.json e as imagens
+ * em dados/midia/ (tudo fora do Git).
  */
 "use strict";
 const fs = require("fs");
@@ -25,7 +32,20 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
   const DIR_DADOS = path.join(__dirname, "dados");
   const DIR_MIDIA = path.join(DIR_DADOS, "midia");
   const ARQ = path.join(DIR_DADOS, "marketing.json");
+  const ARQ_META = path.join(DIR_DADOS, "meta.json");
   fs.mkdirSync(DIR_MIDIA, { recursive: true });
+
+  // conexão feita pelo botão do painel: preenche o que o .env deixou vazio
+  function aplicarConexaoMeta() {
+    let c = {};
+    try { c = JSON.parse(fs.readFileSync(ARQ_META, "utf8")); } catch { return null; }
+    const usar = { META_PAGE_ID: c.pageId, META_PAGE_TOKEN: c.pageToken, META_IG_ID: c.igId };
+    for (const [k, v] of Object.entries(usar)) if (v && !process.env["_ENV_" + k]) process.env[k] = v;
+    return c;
+  }
+  // guarda o que veio do .env, para a conexão do painel não sobrescrever valores colocados à mão
+  for (const k of ["META_PAGE_ID", "META_PAGE_TOKEN", "META_IG_ID"]) if (process.env[k]) process.env["_ENV_" + k] = "1";
+  let conexaoMeta = aplicarConexaoMeta();
 
   const env = (k, padrao = "") => process.env[k] || padrao;
   const SENHA = () => env("MKT_SENHA");
@@ -69,15 +89,22 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
 
   // ------------------------------------------------------------ segurança (senha + limite de tentativas)
   const tentativas = new Map(); // ip -> { n, ate }
+  function senhaConfere(dada) {
+    if (db.senha && db.senha.sal) {
+      const h = crypto.scryptSync(String(dada), db.senha.sal, 32);
+      const certo = Buffer.from(db.senha.hash, "hex");
+      return h.length === certo.length && crypto.timingSafeEqual(h, certo);
+    }
+    const a = Buffer.from(String(dada)), b = Buffer.from(SENHA());
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  }
   function autorizado(req) {
-    const senha = SENHA();
+    const senha = SENHA() || (db.senha && db.senha.hash);
     if (!senha) return { ok: false, status: 503, erro: "Agente de marketing desligado: falta MKT_SENHA no .env do servidor." };
     const ip = String(req.headers["x-real-ip"] || req.socket.remoteAddress || "");
     const t = tentativas.get(ip);
     if (t && t.n >= 8 && Date.now() < t.ate) return { ok: false, status: 429, erro: "Muitas tentativas. Espere 15 minutos." };
-    const dada = Buffer.from(String(req.headers["x-herupu-senha"] || ""));
-    const certa = Buffer.from(senha);
-    if (dada.length === certa.length && crypto.timingSafeEqual(dada, certa)) { tentativas.delete(ip); return { ok: true }; }
+    if (senhaConfere(req.headers["x-herupu-senha"] || "")) { tentativas.delete(ip); return { ok: true }; }
     const n = (t && Date.now() < t.ate ? t.n : 0) + 1;
     tentativas.set(ip, { n, ate: Date.now() + 15 * 60e3 });
     return { ok: false, status: 401, erro: "Senha do marketing incorreta." };
@@ -188,7 +215,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
   // ------------------------------------------------------------ agendador (a cada minuto)
   let trabalhando = false;
   async function rodarAgenda() {
-    if (trabalhando || !SENHA()) return;
+    if (trabalhando || !(SENHA() || db.senha)) return;
     trabalhando = true;
     try {
       const agora = Date.now();
@@ -345,6 +372,65 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     return lista;
   }
 
+  // ------------------------------------------------------------ conectar pela Meta (login)
+  const estadosOAuth = new Map(); // state -> validade
+  const urlRetorno = () => URL_PUBLICA() + "/mkt/meta/retorno";
+  function iniciarConexaoMeta() {
+    if (!env("META_APP_ID") || !env("META_APP_SECRET")) throw new Error("Faltam META_APP_ID e META_APP_SECRET no .env do servidor.");
+    const state = crypto.randomBytes(16).toString("hex");
+    estadosOAuth.set(state, Date.now() + 10 * 60e3);
+    const u = new URL(`https://www.facebook.com/${V()}/dialog/oauth`);
+    u.searchParams.set("client_id", env("META_APP_ID"));
+    u.searchParams.set("redirect_uri", urlRetorno());
+    u.searchParams.set("state", state);
+    if (env("META_LOGIN_CONFIG_ID")) u.searchParams.set("config_id", env("META_LOGIN_CONFIG_ID"));
+    else u.searchParams.set("scope", "pages_show_list,pages_read_engagement,pages_manage_posts,instagram_basic,instagram_content_publish,instagram_manage_comments,instagram_manage_insights,business_management");
+    return u.toString();
+  }
+  async function trocarCodigo(code) {
+    const base = `https://graph.facebook.com/${V()}`;
+    const pedir = async (url) => { const r = await fetch(url, { signal: AbortSignal.timeout(20000) }); const j = await r.json().catch(() => ({})); if (!r.ok || j.error) throw new Error(traduzirErroMeta(j.error || {}) || "Meta " + r.status); return j; };
+    const q = (o) => new URLSearchParams(o).toString();
+    const curto = await pedir(`${base}/oauth/access_token?` + q({ client_id: env("META_APP_ID"), client_secret: env("META_APP_SECRET"), redirect_uri: urlRetorno(), code }));
+    const longo = await pedir(`${base}/oauth/access_token?` + q({ grant_type: "fb_exchange_token", client_id: env("META_APP_ID"), client_secret: env("META_APP_SECRET"), fb_exchange_token: curto.access_token }));
+    // token de Página obtido de um token de usuário de longa duração não expira
+    const paginas = (await pedir(`${base}/me/accounts?` + q({ fields: "id,name,access_token,instagram_business_account{id,username}", limit: "50", access_token: longo.access_token }))).data || [];
+    if (!paginas.length) throw new Error("Nenhuma Página do Facebook foi liberada no login. Refaça e marque a Página da empresa.");
+    const pg = paginas.find((p) => p.instagram_business_account && /herupu/i.test(p.name)) || paginas.find((p) => p.instagram_business_account) || paginas[0];
+    const c = {
+      pageId: pg.id, pageNome: pg.name, pageToken: pg.access_token,
+      igId: pg.instagram_business_account ? pg.instagram_business_account.id : "",
+      igUsuario: pg.instagram_business_account ? pg.instagram_business_account.username : "",
+      conectadoEm: new Date().toISOString(),
+    };
+    fs.writeFileSync(ARQ_META, JSON.stringify(c, null, 1), { mode: 0o600 });
+    for (const k of ["META_PAGE_ID", "META_PAGE_TOKEN", "META_IG_ID"]) delete process.env["_ENV_" + k];
+    process.env.META_IG_TOKEN = ""; // a conexão do painel usa o token da Página também para o Instagram
+    conexaoMeta = aplicarConexaoMeta();
+    usuarioIG = null;
+    return c;
+  }
+  function paginaRetorno(res, ok, texto) {
+    const destino = "/marketing.html?meta=" + (ok ? "ok" : "erro") + "&msg=" + encodeURIComponent(texto);
+    res.writeHead(302, { Location: destino, "Cache-Control": "no-store" });
+    res.end();
+  }
+  async function retornoMeta(req, res) {
+    const u = new URL(req.url, "http://x");
+    const state = u.searchParams.get("state") || "";
+    const validade = estadosOAuth.get(state);
+    estadosOAuth.delete(state);
+    if (!validade || Date.now() > validade) return paginaRetorno(res, false, "O pedido de conexão expirou. Toque em Conectar de novo.");
+    if (u.searchParams.get("error")) return paginaRetorno(res, false, "A conexão foi cancelada na Meta.");
+    try {
+      const c = await trocarCodigo(u.searchParams.get("code") || "");
+      return paginaRetorno(res, true, `Conectado: Página ${c.pageNome}` + (c.igUsuario ? ` e Instagram @${c.igUsuario}` : " (sem Instagram ligado a essa Página)"));
+    } catch (e) {
+      console.log("[HERUPU] conexão Meta:", e.message);
+      return paginaRetorno(res, false, e.message);
+    }
+  }
+
   // ------------------------------------------------------------ rotas
   async function tratar(req, res, url) {
     const auth = autorizado(req);
@@ -354,6 +440,8 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     if (url === "/api/mkt/estado") {
       return enviarJson(res, 200, {
         meta: metaPronta(), instagram: Boolean(env("META_IG_ID")), facebook: Boolean(env("META_PAGE_ID")),
+        conexao: conexaoMeta ? { pagina: conexaoMeta.pageNome, instagram: conexaoMeta.igUsuario, em: conexaoMeta.conectadoEm } : null,
+        podeConectar: Boolean(env("META_APP_ID") && env("META_APP_SECRET")),
         urlPublica: URL_PUBLICA(), config: db.config,
         posts: db.posts.slice().sort((a, b) => Date.parse(b.atualizadoEm) - Date.parse(a.atualizadoEm)).slice(0, 200)
           .map((p) => Object.assign({}, p, { problemas: problemasDoPost(p) })),
@@ -416,6 +504,15 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     }
     if (url === "/api/mkt/ignorar") { db.respondidos[String(corpo.id || "")] = "ignorado"; salvar(); return enviarJson(res, 200, { ok: true }); }
     if (url === "/api/mkt/relatorio") return enviarJson(res, 200, await relatorio());
+    if (url === "/api/mkt/meta/iniciar") return enviarJson(res, 200, { url: iniciarConexaoMeta() });
+    if (url === "/api/mkt/senha") {
+      const nova = String(corpo.nova || "");
+      if (nova.length < 6) return enviarJson(res, 400, { erro: "A senha nova precisa ter pelo menos 6 caracteres." });
+      const sal = crypto.randomBytes(16).toString("hex");
+      db.senha = { sal, hash: crypto.scryptSync(nova, sal, 32).toString("hex"), em: new Date().toISOString() };
+      salvar();
+      return enviarJson(res, 200, { ok: true });
+    }
     if (url === "/api/mkt/config") {
       if (typeof corpo.contexto === "string") db.config.contexto = corpo.contexto.slice(0, 4000) || CONTEXTO_PADRAO;
       if (typeof corpo.kit === "string") db.config.kit = corpo.kit.slice(0, 4000) || KIT_PADRAO;
@@ -428,6 +525,10 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
 
   function rotear(req, res, url) {
     if (req.method === "GET" && url.startsWith("/midia/")) { servirMidia(res, url); return true; }
+    if (req.method === "GET" && url === "/mkt/meta/retorno") {
+      retornoMeta(req, res).catch((e) => paginaRetorno(res, false, e.message));
+      return true;
+    }
     if (!url.startsWith("/api/mkt/")) return false;
     tratar(req, res, url).catch((e) => {
       console.log("[HERUPU] marketing:", e.message);

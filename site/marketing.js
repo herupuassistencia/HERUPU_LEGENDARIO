@@ -80,6 +80,12 @@
       c.appendChild(el("span", { classe: j.instagram && j.meta ? "ok" : "falta", texto: (j.instagram && j.meta ? "● Instagram conectado" : "○ Instagram não configurado") }));
       c.appendChild(document.createTextNode("   "));
       c.appendChild(el("span", { classe: j.facebook && j.meta ? "ok" : "falta", texto: (j.facebook && j.meta ? "● Facebook conectado" : "○ Facebook não configurado") }));
+      $("statusMeta").textContent = j.conexao
+        ? "Conectado à Página " + j.conexao.pagina + (j.conexao.instagram ? " e ao Instagram @" + j.conexao.instagram : "") + " desde " + dataBonita(j.conexao.em) + "."
+        : (j.meta ? "Conectado pelas chaves do servidor (.env)." : "Ainda não conectado.");
+      $("btnConectarMeta").hidden = !j.podeConectar;
+      if (!j.podeConectar && !j.meta) $("statusMeta").textContent += " Para usar o botão, o servidor precisa de META_APP_ID e META_APP_SECRET no .env.";
+      if (!j.meta) c.appendChild(el("span", { texto: "  · conecte em Ajustes" }));
       $("cfgContexto").value = j.config.contexto || "";
       $("cfgKit").value = j.config.kit || "";
       $("cfgAuto").checked = !!j.config.autoResponder;
@@ -359,6 +365,28 @@
     api("config", { contexto: $("cfgContexto").value, kit: $("cfgKit").value, autoResponder: $("cfgAuto").checked })
       .then(function () { aviso("Ajustes salvos."); }).catch(function (err) { aviso(err.message); }).then(volta);
   });
+
+  $("btnConectarMeta").addEventListener("click", function (e) {
+    var volta = ocupado(e.target, "Abrindo a Meta…");
+    api("meta/iniciar", {}).then(function (j) { location.href = j.url; }).catch(function (err) { aviso(err.message); volta(); });
+  });
+  $("btnTrocarSenha").addEventListener("click", function (e) {
+    var nova = $("senhaNova").value;
+    if (nova.length < 6) { aviso("A senha nova precisa ter pelo menos 6 caracteres."); return; }
+    var volta = ocupado(e.target, "Trocando…");
+    api("senha", { nova: nova }).then(function () {
+      senha = nova; try { localStorage.setItem(CHAVE_SENHA, nova); } catch (e2) { /* ok */ }
+      $("senhaNova").value = ""; aviso("Senha trocada. Use a nova senha nos outros aparelhos.");
+    }).catch(function (err) { aviso(err.message); }).then(volta);
+  });
+
+  // volta do login da Meta
+  (function () {
+    var q = new URLSearchParams(location.search);
+    if (!q.get("meta")) return;
+    history.replaceState(null, "", "marketing.html");
+    setTimeout(function () { aviso((q.get("meta") === "ok" ? "✔ " : "✖ ") + (q.get("msg") || "")); }, 300);
+  })();
 
   // ------------------------------------------------------------ início
   if (senha) carregar().catch(function (err) { sair(); aviso(err.message, "avisoLogin"); });

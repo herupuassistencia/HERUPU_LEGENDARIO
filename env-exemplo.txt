@@ -11,7 +11,11 @@ HERUPU_MODELO_TEXTO=gemini-flash-lite-latest
 # ---- Agente de Marketing (painel em /marketing.html) ----
 # Senha do painel de marketing (sem ela o módulo fica desligado):
 MKT_SENHA=crie_uma_senha
-# Conexão com a Meta (os mesmos dados da Central de Marketing):
+# Conexão com a Meta pelo botão do painel (os mesmos do app da Central):
+META_APP_ID=
+META_APP_SECRET=
+META_LOGIN_CONFIG_ID=
+# Ou, em vez do botão, tokens colados à mão:
 META_PAGE_ID=
 META_PAGE_TOKEN=
 META_IG_ID=
