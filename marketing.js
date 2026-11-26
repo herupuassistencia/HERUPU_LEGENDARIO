@@ -29,12 +29,14 @@ const path = require("path");
 const crypto = require("crypto");
 const { PRODUTOS, PLAYBOOK, FORMATOS } = require("./estrategia");
 
-module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, TIPOS }) {
+module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, TIPOS, falarMp3 }) {
   const DIR_DADOS = path.join(__dirname, "dados");
   const DIR_MIDIA = path.join(DIR_DADOS, "midia");
   const ARQ = path.join(DIR_DADOS, "marketing.json");
   const ARQ_META = path.join(DIR_DADOS, "meta.json");
   fs.mkdirSync(DIR_MIDIA, { recursive: true });
+  let estudio = null;
+  try { estudio = require("./estudio")({ DIR_MIDIA, falarMp3 }); } catch (e) { console.log("[HERUPU] estúdio indisponível:", e.message); }
 
   // conexão feita pelo botão do painel: preenche o que o .env deixou vazio
   function aplicarConexaoMeta() {
@@ -173,9 +175,17 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     const ig = env("META_IG_ID");
     if (!ig) throw new Error("Falta META_IG_ID no .env.");
     const urls = post.midias.map((m) => URL_PUBLICA() + "/midia/" + m.arquivo).slice(0, 10);
-    if (!urls.length) throw new Error("O Instagram exige pelo menos uma imagem.");
     let criacao;
-    if (urls.length === 1) {
+    if (post.video) {
+      criacao = (await graph("POST", `${ig}/media`, { media_type: "REELS", video_url: URL_PUBLICA() + "/midia/" + post.video.arquivo, caption: post.legenda, share_to_feed: "true" }, IG)).id;
+      for (let i = 0; i < 40; i++) { // vídeo demora mais para processar
+        const st = await graph("GET", criacao, { fields: "status_code,status" }, IG);
+        if (st.status_code === "FINISHED") break;
+        if (st.status_code === "ERROR") throw new Error("O Instagram recusou o vídeo: " + (st.status || ""));
+        await dormir(5000);
+      }
+    } else if (!urls.length) throw new Error("O Instagram exige pelo menos uma imagem.");
+    else if (urls.length === 1) {
       criacao = (await graph("POST", `${ig}/media`, { image_url: urls[0], caption: post.legenda }, IG)).id;
     } else {
       const filhos = [];
@@ -183,7 +193,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
       for (const f of filhos) await esperarContainer(f);
       criacao = (await graph("POST", `${ig}/media`, { media_type: "CAROUSEL", children: filhos.join(","), caption: post.legenda }, IG)).id;
     }
-    await esperarContainer(criacao);
+    if (!post.video) await esperarContainer(criacao);
     const pub = await graph("POST", `${ig}/media_publish`, { creation_id: criacao }, IG);
     let link = "";
     try { link = (await graph("GET", pub.id, { fields: "permalink" }, IG)).permalink || ""; } catch { /* sem link */ }
@@ -195,7 +205,8 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     if (!pg) throw new Error("Falta META_PAGE_ID no .env.");
     const urls = post.midias.map((m) => URL_PUBLICA() + "/midia/" + m.arquivo).slice(0, 10);
     let j;
-    if (!urls.length) j = await graph("POST", `${pg}/feed`, { message: post.legenda });
+    if (post.video) j = await graph("POST", `${pg}/videos`, { file_url: URL_PUBLICA() + "/midia/" + post.video.arquivo, description: post.legenda });
+    else if (!urls.length) j = await graph("POST", `${pg}/feed`, { message: post.legenda });
     else if (urls.length === 1) j = await graph("POST", `${pg}/photos`, { url: urls[0], message: post.legenda });
     else {
       const ids = [];
@@ -462,7 +473,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
   }
   function servirMidia(res, url) {
     const nome = path.basename(url);
-    if (!/^[a-f0-9]{24}\.(jpg|png)$/.test(nome)) { res.writeHead(404); return res.end(); }
+    if (!/^[a-f0-9]{24}\.(jpg|png|mp4)$/.test(nome)) { res.writeHead(404); return res.end(); }
     fs.readFile(path.join(DIR_MIDIA, nome), (err, d) => {
       if (err) { res.writeHead(404); return res.end(); }
       res.writeHead(200, { "Content-Type": TIPOS[path.extname(nome)], "Cache-Control": "public, max-age=604800" });
@@ -521,9 +532,9 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
   function problemasDoPost(p) {
     const lista = [];
     if (!p.legenda.trim()) lista.push("falta a legenda");
-    if (p.redes.includes("instagram") && !p.midias.length) lista.push("o Instagram exige imagem");
+    if (p.redes.includes("instagram") && !p.midias.length && !p.video) lista.push("o Instagram exige imagem ou vídeo (toque em ✦ Gerar arte ou ✦ Gerar Reel)");
     if (p.redes.includes("instagram") && p.midias.some((m) => !/\.jpg$/.test(m.arquivo))) lista.push("o Instagram só aceita JPG");
-    if (p.formato === "reels") lista.push("é um Reel: grave/gere o vídeo pelo roteiro e publique pelo app (publicação de vídeo pelo agente vem na próxima etapa), ou troque o formato para carrossel/imagem");
+    if (p.formato === "reels" && !p.video) lista.push("é um Reel: toque em ✦ Gerar Reel para o agente montar o vídeo com narração");
     if (p.formato === "story") lista.push("é um story: publique pelo app do Instagram (a API não agenda stories com figurinhas)");
     return lista;
   }
@@ -665,6 +676,31 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     }
     if (url === "/api/mkt/ignorar") { db.respondidos[String(corpo.id || "")] = "ignorado"; salvar(); return enviarJson(res, 200, { ok: true }); }
     if (url === "/api/mkt/relatorio") return enviarJson(res, 200, await relatorio());
+    if (url === "/api/mkt/arte" || url === "/api/mkt/reel") {
+      if (!estudio) return enviarJson(res, 503, { erro: "Estúdio indisponível no servidor (rode: npm install e apt-get install -y ffmpeg fonts-montserrat)." });
+      const p = acharPost(String(corpo.id || ""));
+      if (!p) return enviarJson(res, 404, { erro: "Post não encontrado." });
+      if (["publicando", "publicado"].includes(p.status)) return enviarJson(res, 409, { erro: "Post já publicado." });
+      const roteiro = (p.roteiro && p.roteiro.length ? p.roteiro : [p.gancho || p.tema || p.legenda.split("\n")[0]]).filter(Boolean);
+      const limpar = (t) => String(t).replace(/^\s*(\d+[-–]?\d*\s*s?:|slide\s*\d+:|cena\s*\d+:)\s*/i, "").trim();
+      if (url === "/api/mkt/arte") {
+        const titulo = limpar(p.gancho || roteiro[0] || p.tema);
+        const m = await estudio.arte({ titulo, destaque: "", texto: roteiro.slice(p.gancho ? 0 : 1, 4).map(limpar).join(" · ").slice(0, 220), chamada: p.foco === "clientes" ? "Peça seu técnico pelo app" : "Cadastro grátis · link na bio" });
+        p.midias = (p.midias || []).concat([m]).slice(-10);
+      } else {
+        // cada linha do roteiro vira uma cena: texto grande na tela + o Antonio narrando
+        const cenas = roteiro.slice(0, 7).map((t) => {
+          const txt = limpar(t), fala = (txt.match(/fala:\s*(.+)$/i) || [])[1] || txt.replace(/texto:\s*/i, "");
+          const tela = ((txt.match(/texto(?: na tela)?:\s*([^—|]+)/i) || [])[1] || txt).split(/fala:/i)[0].slice(0, 90);
+          return { tela: tela.trim(), fala: fala.trim().slice(0, 300) };
+        });
+        p.video = await estudio.reel(cenas, p.foco === "clientes" ? "Peça pelo app HERUPU" : "Cadastro grátis · link na bio");
+        p.formato = "reels";
+      }
+      if (p.status === "aprovado") p.status = "rascunho";
+      p.atualizadoEm = new Date().toISOString(); salvar();
+      return enviarJson(res, 200, Object.assign({}, p, { problemas: problemasDoPost(p) }));
+    }
     if (url === "/api/mkt/diagnostico") return enviarJson(res, 200, await diagnostico());
     if (url === "/api/mkt/plano") return enviarJson(res, 200, { posts: await planoDaSemana({ foco: corpo.foco, quantidade: corpo.quantidade, inicio: corpo.inicio }) });
     if (url === "/api/mkt/links") return enviarJson(res, 200, { links: db.links, base: URL_PUBLICA() + "/r/" });

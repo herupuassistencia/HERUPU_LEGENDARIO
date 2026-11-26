@@ -143,7 +143,12 @@
       });
       if (p.problemas && p.problemas.length && p.status !== "publicado") card.appendChild(el("p", { classe: "problemas", texto: "Falta: " + p.problemas.join(", ") }));
       var acoes = el("div", { classe: "acoes" });
-      if (p.status !== "publicado" && p.status !== "publicando") acoes.appendChild(el("button", { classe: "botao", type: "button", texto: "Editar", onclick: function () { editar(p); } }));
+      if (p.video) card.appendChild(el("video", { src: p.video.url, controls: "", playsinline: "", preload: "metadata", style: "width:100%;max-height:420px;border-radius:10px;margin:8px 0;background:#000" }));
+      if (p.status !== "publicado" && p.status !== "publicando") {
+        acoes.appendChild(el("button", { classe: "botao principal", type: "button", texto: "✦ Gerar arte", onclick: function (e) { gerarMidia(p, "arte", e.target); } }));
+        acoes.appendChild(el("button", { classe: "botao principal", type: "button", texto: "✦ Gerar Reel", onclick: function (e) { gerarMidia(p, "reel", e.target); } }));
+        acoes.appendChild(el("button", { classe: "botao", type: "button", texto: "Editar", onclick: function () { editar(p); } }));
+      }
       if (p.status === "aprovado") acoes.appendChild(el("button", { classe: "botao", type: "button", texto: "Tirar da agenda", onclick: function (e) { acao(p, "desaprovar", e.target); } }));
       if (p.status === "erro") acoes.appendChild(el("button", { classe: "botao principal", type: "button", texto: "Tentar de novo", onclick: function (e) { publicarAgora(p, e.target); } }));
       acoes.appendChild(el("button", { classe: "botao", type: "button", texto: "Duplicar", onclick: function (e) { acao(p, "duplicar", e.target); } }));
@@ -161,6 +166,11 @@
     pendente = { texto: texto, em: Date.now() };
     aviso(texto + " Toque de novo para confirmar.");
     return false;
+  }
+  function gerarMidia(p, tipo, botao) {
+    var volta = ocupado(botao, tipo === "reel" ? "Montando o Reel (até 2 min)…" : "Criando a arte…");
+    api(tipo, { id: p.id }).then(function () { aviso(tipo === "reel" ? "✔ Reel pronto. Assista no card e aprove." : "✔ Arte criada e anexada ao post."); return carregar(); })
+      .catch(function (e) { aviso(e.message); }).then(volta);
   }
   function acao(p, nome, botao) {
     var volta = ocupado(botao, "…");

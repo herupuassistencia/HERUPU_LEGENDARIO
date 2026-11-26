@@ -51,7 +51,7 @@ const TIPOS = {
   ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8",
   ".webmanifest": "application/manifest+json; charset=utf-8", ".svg": "image/svg+xml",
   ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".ico": "image/x-icon",
-  ".mp3": "audio/mpeg", ".woff2": "font/woff2", ".map": "application/json",
+  ".mp3": "audio/mpeg", ".mp4": "video/mp4", ".woff2": "font/woff2", ".map": "application/json",
 };
 
 function enviarJson(res, status, obj) {
@@ -352,7 +352,17 @@ function servirArquivo(req, res) {
 }
 
 // ------------------------------------------------------------------ agente de marketing
-const marketing = require("./marketing")({ chamarCerebro, enviarJson, lerCorpo, TIPOS });
+async function falarMp3(texto) {
+  if (!MsEdgeTTS) throw new Error("voz indisponível");
+  const tts = new MsEdgeTTS({ connectionTimeoutMs: 4000, synthesisTimeoutMs: 15000 });
+  await tts.setMetadata(VOZ, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
+  const { audioStream } = tts.toStream(escapar(String(texto).slice(0, 600)), { rate: VOZ_RATE, pitch: VOZ_PITCH });
+  const pedacos = [];
+  await new Promise((ok, falha) => { audioStream.on("data", (d) => pedacos.push(d)); audioStream.on("close", ok); audioStream.on("end", ok); audioStream.on("error", falha); });
+  try { tts.close(); } catch { /* ok */ }
+  return Buffer.concat(pedacos);
+}
+const marketing = require("./marketing")({ chamarCerebro, enviarJson, lerCorpo, TIPOS, falarMp3 });
 
 const servidor = http.createServer((req, res) => {
   const url = (req.url || "").split("?")[0];
