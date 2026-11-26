@@ -27,6 +27,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { PRODUTOS, PLAYBOOK, FORMATOS } = require("./estrategia");
 
 module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, TIPOS }) {
   const DIR_DADOS = path.join(__dirname, "dados");
@@ -96,7 +97,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
   function carregar() {
     try { return JSON.parse(fs.readFileSync(ARQ, "utf8")); } catch { return {}; }
   }
-  let db = Object.assign({ posts: [], respondidos: {}, config: {} }, carregar());
+  let db = Object.assign({ posts: [], respondidos: {}, config: {}, links: {} }, carregar());
   db.config = Object.assign({ contexto: CONTEXTO_PADRAO, kit: KIT_PADRAO, autoResponder: false }, db.config);
   function salvar() {
     const tmp = ARQ + ".tmp";
@@ -276,7 +277,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
   async function gerarLegenda({ tema, rede, extra }) {
     const recentes = (await legendasJaPublicadas().catch(() => [])).slice(0, 12).map((x) => "- " + String(x.texto).split("\n")[0].slice(0, 120)).join("\n");
     const sistema =
-      "Você é o social media da empresa. " + ESTILO + " Contexto da empresa: " + db.config.contexto + " " +
+      "Você é o social media da empresa, especialista em conteúdo que viraliza. " + ESTILO + " Contexto da empresa: " + db.config.contexto + "\n" + PRODUTOS + "\n" + PLAYBOOK + "\n" +
       "Formato da legenda: 1ª linha é um gancho de no máximo 10 palavras; depois 3 a 6 linhas curtas de valor; " +
       "uma chamada para ação clara; no fim 3 a 5 hashtags relevantes. " +
       (rede === "facebook" ? "Para Facebook pode ser um pouco mais explicativa e com o link escrito por extenso. " : "No Instagram, o link vai como 'link na bio'. ") +
@@ -340,18 +341,113 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     if (!ig) throw new Error("Falta META_IG_ID no .env.");
     const conta = await graph("GET", ig, { fields: "username,followers_count,media_count" }, IG);
     const midias = (await graph("GET", `${ig}/media`, { fields: "id,caption,timestamp,like_count,comments_count,permalink,media_type", limit: 20 }, IG)).data || [];
+    let erroMetricas = "";
     for (const m of midias) {
       m.alcance = null;
-      for (const metricas of ["reach,saved,shares", "reach"]) {
+      for (const metricas of ["views,reach,saved,shares", "reach,saved,shares", "reach", "views"]) {
         try {
           const ins = (await graph("GET", `${m.id}/insights`, { metric: metricas }, IG)).data || [];
-          for (const i of ins) m[{ reach: "alcance", saved: "salvos", shares: "compartilhamentos" }[i.name] || i.name] = i.values && i.values[0] ? i.values[0].value : i.total_value && i.total_value.value;
+          for (const i of ins) m[{ reach: "alcance", saved: "salvos", shares: "compartilhamentos", views: "visualizacoes" }[i.name] || i.name] = i.values && i.values[0] ? i.values[0].value : i.total_value && i.total_value.value;
           break;
-        } catch { /* métrica não disponível para esse tipo de post */ }
+        } catch (e) { erroMetricas = erroMetricas || e.message; }
       }
       m.caption = (m.caption || "").slice(0, 90);
     }
-    return { conta, midias };
+    const semAlcance = midias.length && midias.every((m) => m.alcance == null);
+    return { conta, midias, avisoMetricas: semAlcance ? "A Meta não liberou alcance/visualizações: " + erroMetricas : "" };
+  }
+
+  // ------------------------------------------------------------ estrategista viral
+  function resumoParaIA(rel) {
+    if (!rel) return "(sem dados de desempenho agora)";
+    const linhas = rel.midias.slice(0, 15).map((m) =>
+      `- ${String(m.timestamp).slice(0, 10)} ${m.media_type}: curtidas ${m.like_count || 0}, coment. ${m.comments_count || 0}` +
+      (m.alcance != null ? `, alcance ${m.alcance}` : "") + (m.visualizacoes != null ? `, views ${m.visualizacoes}` : "") +
+      (m.compartilhamentos != null ? `, compart. ${m.compartilhamentos}` : "") + ` | "${m.caption}"`);
+    return `Conta @${rel.conta.username}: ${rel.conta.followers_count || 0} seguidores, ${rel.conta.media_count || 0} posts.\n` + linhas.join("\n");
+  }
+  function resumoLinks() {
+    const l = Object.entries(db.links || {}).map(([c, x]) => `- ${x.nome} (/r/${c}): ${x.total || 0} cliques`);
+    return l.length ? l.join("\n") : "(nenhum link rastreável criado ainda)";
+  }
+  async function diagnostico() {
+    let rel = null; try { rel = await relatorio(); } catch { /* sem dados */ }
+    const sistema = "Você é um estrategista de crescimento orgânico em Instagram e TikTok, direto e honesto. " + ESTILO + "\n" + PRODUTOS + "\n" + PLAYBOOK +
+      "\nAnalise os números reais abaixo, sem inventar dados. Responda só com JSON: " +
+      "{\"resumo\": \"2 frases sinceras sobre a situação\", \"problemas\": [\"até 5 causas prováveis\"], \"acoes\": [\"5 ações concretas para os próximos 7 dias, em ordem de impacto\"], \"metas\": [\"3 metas medíveis para 30 dias\"]}";
+    const j = await iaJson(sistema, "DESEMPENHO DO INSTAGRAM:\n" + resumoParaIA(rel) + "\n\nLINKS RASTREÁVEIS:\n" + resumoLinks(), 0.4);
+    return { resumo: String(j.resumo || ""), problemas: [].concat(j.problemas || []).map(String), acoes: [].concat(j.acoes || []).map(String), metas: [].concat(j.metas || []).map(String) };
+  }
+  const FOCOS = {
+    tecnicos: "captar TÉCNICOS para o app HERUPU Técnico em todo o Brasil (público: prestadores de serviço autônomos)",
+    clientes: "captar CLIENTES para pedirem técnicos pelo app HERUPU Cliente",
+    solar: "vender energia solar da HERUPU em Macapá e no Amapá",
+    sistemas: "vender o HERUPU SISTEMAS para malharias e comunicação visual (teste grátis 7 dias)",
+    misto: "crescimento geral da marca, priorizando a captação de técnicos",
+  };
+  async function planoDaSemana({ foco, quantidade, inicio }) {
+    const alvo = FOCOS[foco] || FOCOS.tecnicos;
+    const n = Math.min(Math.max(Number(quantidade) || 7, 3), 10);
+    let rel = null; try { rel = await relatorio(); } catch { /* sem dados */ }
+    const ja = (await legendasJaPublicadas().catch(() => [])).slice(0, 20).map((x) => "- " + String(x.texto).split("\n")[0].slice(0, 100)).join("\n");
+    const link = Object.keys(db.links || {}).find((c) => db.links[c].foco === foco) || "";
+    const sistema = "Você é o estrategista e roteirista de conteúdo viral da HERUPU. " + ESTILO + "\n" + PRODUTOS + "\n" + PLAYBOOK +
+      `\nObjetivo desta semana: ${alvo}.` +
+      `\nCrie ${n} posts DIFERENTES entre si e diferentes dos já publicados. Pelo menos metade em formato reels. ` +
+      "Misture objetivos: alcance (compartilhável), salvamento (útil), conversão (cadastro). Pense como o público pensa." +
+      (link ? ` Na conversão, use o link rastreável ia.herupusistemas.com.br/r/${link}.` : "") +
+      "\nPara reels: roteiro cena a cena com tempo, o que aparece, texto na tela e fala (curto, 7 a 25 s, gancho no primeiro segundo, final que dá vontade de rever ou mandar para alguém). " +
+      "Para carrossel: o texto de cada slide (slide 1 = gancho, último = chamada). " +
+      "Para imagem/story: o texto da arte. " +
+      "\nResponda só com JSON: {\"posts\": [{\"dia\": 1, \"horario\": \"18:30\", \"formato\": \"reels|carrossel|imagem|story\", \"objetivo\": \"alcance|salvamento|conversao\", " +
+      "\"titulo\": \"nome curto\", \"gancho\": \"primeira frase/tela\", \"roteiro\": [\"cena ou slide 1\", \"cena ou slide 2\"], " +
+      "\"ideia_arte\": \"o que gravar ou desenhar, com o leão HERUPU quando fizer sentido\", \"legenda\": \"legenda pronta com CTA e 3 a 5 hashtags\"}]}";
+    const j = await iaJson(sistema, "Desempenho recente:\n" + resumoParaIA(rel) + "\n\nJá publicados (não repetir):\n" + (ja || "(nenhum)"), 0.9);
+    const lista = [].concat(j.posts || []).slice(0, n);
+    if (!lista.length) throw new Error("A IA não devolveu o plano. Tente de novo.");
+    const base = inicio && !isNaN(Date.parse(inicio)) ? new Date(inicio) : new Date(Date.now() + 864e5);
+    const criados = [];
+    lista.forEach((x, i) => {
+      const dia = Math.min(Math.max(Number(x.dia) || i + 1, 1), 14) - 1;
+      const [hh, mm] = String(x.horario || "18:30").split(":").map((v) => Number(v) || 0);
+      // horário de Brasília (UTC-3), mesmo com o servidor em outro fuso
+      const b3 = new Date(base.getTime() - 3 * 3600e3);
+      const quando = new Date(Date.UTC(b3.getUTCFullYear(), b3.getUTCMonth(), b3.getUTCDate() + dia, hh + 3, mm));
+      const p = limparPost({ tema: String(x.titulo || x.gancho || "").slice(0, 300), legenda: String(x.legenda || ""), redes: ["instagram"], quando: quando.toISOString() });
+      p.formato = FORMATOS.includes(x.formato) ? x.formato : "imagem";
+      p.objetivo = String(x.objetivo || "");
+      p.gancho = String(x.gancho || "").slice(0, 300);
+      p.roteiro = [].concat(x.roteiro || []).map((t) => String(t).slice(0, 400)).slice(0, 12);
+      p.ideiaImagem = String(x.ideia_arte || "").slice(0, 500);
+      p.origem = "plano"; p.foco = foco;
+      db.posts.push(p); criados.push(p);
+    });
+    salvar();
+    return criados;
+  }
+
+  // ------------------------------------------------------------ links rastreáveis (/r/codigo)
+  function hojeLocal() { return new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10); }
+  function contarClique(codigo, res) {
+    const l = db.links[codigo];
+    if (!l) { res.writeHead(302, { Location: "https://tecnico.herupusistemas.com.br" }); return res.end(); }
+    l.total = (l.total || 0) + 1;
+    l.dias = l.dias || {}; l.dias[hojeLocal()] = (l.dias[hojeLocal()] || 0) + 1;
+    salvar();
+    const u = new URL(l.destino);
+    if (!u.searchParams.has("utm_source")) { u.searchParams.set("utm_source", "herupu"); u.searchParams.set("utm_campaign", codigo); }
+    res.writeHead(302, { Location: u.toString(), "Cache-Control": "no-store" });
+    res.end();
+  }
+  function criarLink({ nome, destino, codigo, foco }) {
+    let u;
+    try { u = new URL(String(destino || "")); } catch { throw new Error("Endereço de destino inválido. Use https://..."); }
+    if (u.protocol !== "https:") throw new Error("O destino precisa começar com https://");
+    const cod = String(codigo || nome || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 30) || crypto.randomBytes(3).toString("hex");
+    if (db.links[cod]) throw new Error("Já existe um link com o código " + cod + ".");
+    db.links[cod] = { nome: String(nome || cod).slice(0, 80), destino: u.toString(), foco: FOCOS[foco] ? foco : "", total: 0, dias: {}, criadoEm: new Date().toISOString() };
+    salvar();
+    return cod;
   }
 
   // ------------------------------------------------------------ mídia
@@ -386,6 +482,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     if (!p.midias) p.midias = [];
     if (entrada.quando !== undefined) p.quando = entrada.quando && !isNaN(Date.parse(entrada.quando)) ? new Date(entrada.quando).toISOString() : null;
     if (p.legenda === undefined) p.legenda = "";
+    if (typeof entrada.formato === "string" && FORMATOS.includes(entrada.formato)) p.formato = entrada.formato;
     p.atualizadoEm = new Date().toISOString();
     return p;
   }
@@ -426,6 +523,8 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     if (!p.legenda.trim()) lista.push("falta a legenda");
     if (p.redes.includes("instagram") && !p.midias.length) lista.push("o Instagram exige imagem");
     if (p.redes.includes("instagram") && p.midias.some((m) => !/\.jpg$/.test(m.arquivo))) lista.push("o Instagram só aceita JPG");
+    if (p.formato === "reels") lista.push("é um Reel: grave/gere o vídeo pelo roteiro e publique pelo app (publicação de vídeo pelo agente vem na próxima etapa), ou troque o formato para carrossel/imagem");
+    if (p.formato === "story") lista.push("é um story: publique pelo app do Instagram (a API não agenda stories com figurinhas)");
     return lista;
   }
 
@@ -566,6 +665,11 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     }
     if (url === "/api/mkt/ignorar") { db.respondidos[String(corpo.id || "")] = "ignorado"; salvar(); return enviarJson(res, 200, { ok: true }); }
     if (url === "/api/mkt/relatorio") return enviarJson(res, 200, await relatorio());
+    if (url === "/api/mkt/diagnostico") return enviarJson(res, 200, await diagnostico());
+    if (url === "/api/mkt/plano") return enviarJson(res, 200, { posts: await planoDaSemana({ foco: corpo.foco, quantidade: corpo.quantidade, inicio: corpo.inicio }) });
+    if (url === "/api/mkt/links") return enviarJson(res, 200, { links: db.links, base: URL_PUBLICA() + "/r/" });
+    if (url === "/api/mkt/link") return enviarJson(res, 200, { codigo: criarLink(corpo) });
+    if (url === "/api/mkt/link-excluir") { delete db.links[String(corpo.codigo || "")]; salvar(); return enviarJson(res, 200, { ok: true }); }
     if (url === "/api/mkt/meta/segredo") { await salvarSegredoApp(corpo.segredo); return enviarJson(res, 200, { ok: true }); }
     if (url === "/api/mkt/meta/iniciar") return enviarJson(res, 200, { url: iniciarConexaoMeta() });
     if (url === "/api/mkt/senha") {
@@ -588,6 +692,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
 
   function rotear(req, res, url) {
     if (req.method === "GET" && url.startsWith("/midia/")) { servirMidia(res, url); return true; }
+    if (req.method === "GET" && /^\/r\/[a-z0-9-]{1,30}$/.test(url)) { contarClique(url.slice(3), res); return true; }
     if (req.method === "GET" && url === "/mkt/meta/retorno") {
       retornoMeta(req, res).catch((e) => paginaRetorno(res, false, e.message));
       return true;

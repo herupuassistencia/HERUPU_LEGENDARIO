@@ -40,7 +40,7 @@
 
 .mkt-card { padding: 14px; border-radius: 14px; border: 1px solid var(--borda); background: var(--painel); margin-bottom: 10px; }
 .mkt-card .topo-card { display: flex; justify-content: space-between; gap: 8px; align-items: center; margin-bottom: 8px; }
-.mkt-card .selo { font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid currentColor; }
+.mkt-card .selo { white-space: nowrap; font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid currentColor; }
 .selo-rascunho { color: var(--suave); }
 .selo-aprovado { color: var(--azul-vivo); }
 .selo-publicando { color: #ffd35a; }
@@ -63,4 +63,18 @@
 .mkt-metricas { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; text-align: center; }
 .mkt-metricas div { padding: 6px 2px; border-radius: 8px; background: var(--painel-2); font-size: 12px; color: var(--suave); }
 .mkt-metricas strong { display: block; font-size: 16px; color: var(--texto); }
+.mkt select { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--borda); background: var(--painel-2); color: var(--texto); font: inherit; }
+.mkt-roteiro { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: var(--painel-2); font-size: 14px; }
+.mkt-roteiro ol { margin: 6px 0 0; padding-left: 20px; }
+.mkt-roteiro li { margin: 4px 0; }
+.mkt-card details { margin-top: 8px; font-size: 14px; }
+.mkt-card summary { cursor: pointer; color: var(--azul-vivo); }
+.mkt-card .gancho { font-weight: 600; margin: 4px 0; }
+.selo-formato { color: #c9a2ff; margin-left: 6px; }
+.mkt-diag h3 { font-size: 14px; margin: 14px 0 4px; color: var(--azul-vivo); letter-spacing: 1px; }
+.mkt-diag ul { margin: 0; padding-left: 20px; }
+.mkt-diag li { margin: 4px 0; }
+.mkt-link { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 10px 0; border-top: 1px solid var(--borda); font-size: 14px; }
+.mkt-link code { font-size: 12px; color: var(--suave); word-break: break-all; }
+.mkt-link strong { font-size: 20px; }
 .mkt-vazio { text-align: center; color: var(--suave); padding: 24px 8px; }

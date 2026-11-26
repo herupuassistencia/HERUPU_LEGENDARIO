@@ -97,7 +97,7 @@
   // ------------------------------------------------------------ abas
   function abrirAba(nome) {
     document.querySelectorAll(".mkt-abas button").forEach(function (b) { b.setAttribute("aria-selected", b.dataset.aba === nome ? "true" : "false"); });
-    ["posts", "novo", "comentarios", "relatorio", "ajustes"].forEach(function (a) { $("aba-" + a).hidden = a !== nome; });
+    ["posts", "estrategia", "novo", "comentarios", "relatorio", "ajustes"].forEach(function (a) { $("aba-" + a).hidden = a !== nome; });
     aviso("");
   }
   document.querySelectorAll(".mkt-abas button").forEach(function (b) {
@@ -124,11 +124,16 @@
     posts.forEach(function (p) {
       var card = el("article", { classe: "mkt-card" }, [
         el("div", { classe: "topo-card" }, [
-          el("span", { classe: "selo selo-" + p.status, texto: NOMES_STATUS[p.status] || p.status }),
+          el("span", {}, [el("span", { classe: "selo selo-" + p.status, texto: NOMES_STATUS[p.status] || p.status }),
+            p.formato ? el("span", { classe: "selo selo-formato", texto: p.formato + (p.objetivo ? " · " + p.objetivo : "") }) : null]),
           el("span", { classe: "quando", texto: p.redes.join(" + ") + " · " + dataBonita(p.quando) })
         ])
       ]);
       if (p.midias.length) card.appendChild(el("div", { classe: "miniaturas" }, p.midias.map(function (m) { return el("img", { src: m.url, alt: "", loading: "lazy" }); })));
+      if (p.gancho) card.appendChild(el("p", { classe: "gancho", texto: "Gancho: " + p.gancho }));
+      if (p.roteiro && p.roteiro.length) card.appendChild(el("details", {}, [el("summary", { texto: p.formato === "reels" ? "Roteiro do Reel" : "Texto dos slides / da arte" }),
+        el("ol", {}, p.roteiro.map(function (t) { return el("li", { texto: t }); })),
+        p.ideiaImagem ? el("p", { classe: "nota", texto: "Arte/gravação: " + p.ideiaImagem }) : null]));
       card.appendChild(el("div", { classe: "texto", texto: p.legenda || "(sem legenda)" }));
       Object.keys(p.resultados || {}).forEach(function (rede) {
         var r = p.resultados[rede];
@@ -177,7 +182,15 @@
     $("tema").value = ""; $("legenda").value = ""; $("quando").value = "";
     $("redeInstagram").checked = true; $("redeFacebook").checked = false;
     $("ideiaImagem").hidden = true;
+    $("formato").value = "imagem"; desenharRoteiro(null);
     contar(); desenharMidias();
+  }
+  function desenharRoteiro(p) {
+    var box = $("roteiroEditor"); box.textContent = "";
+    box.hidden = !(p && ((p.roteiro && p.roteiro.length) || p.gancho));
+    if (box.hidden) return;
+    if (p.gancho) box.appendChild(el("p", { classe: "gancho", texto: "Gancho: " + p.gancho }));
+    if (p.roteiro && p.roteiro.length) box.appendChild(el("ol", {}, p.roteiro.map(function (t) { return el("li", { texto: t }); })));
   }
   function editar(p) {
     estado.editando = p.id; estado.midias = p.midias.slice();
@@ -186,6 +199,7 @@
     $("quando").value = paraCampoData(p.quando);
     $("redeInstagram").checked = p.redes.indexOf("instagram") >= 0;
     $("redeFacebook").checked = p.redes.indexOf("facebook") >= 0;
+    $("formato").value = p.formato || "imagem"; desenharRoteiro(p);
     $("ideiaImagem").hidden = !p.ideiaImagem;
     if (p.ideiaImagem) $("ideiaImagem").textContent = "Ideia de imagem: " + p.ideiaImagem;
     contar(); desenharMidias(); abrirAba("novo");
@@ -200,7 +214,7 @@
     if ($("redeFacebook").checked) redes.push("facebook");
     return {
       id: estado.editando || undefined, redes: redes, tema: $("tema").value.trim(), legenda: $("legenda").value,
-      midias: estado.midias, quando: $("quando").value ? new Date($("quando").value).toISOString() : null
+      midias: estado.midias, formato: $("formato").value, quando: $("quando").value ? new Date($("quando").value).toISOString() : null
     };
   }
   function salvarEditor() {
@@ -338,18 +352,19 @@
       });
       $("resumoConta").appendChild(el("p", { classe: "nota", texto: "@" + j.conta.username + " · " + (j.conta.followers_count || 0) + " seguidores · " + (j.conta.media_count || 0) + " posts" }));
       $("resumoConta").appendChild(el("div", { classe: "mkt-metricas" }, [
-        el("div", {}, [el("strong", { texto: String(soma.alcance) }), "alcance 7 dias"]),
+        el("div", {}, [el("strong", { texto: j.avisoMetricas ? "–" : String(soma.alcance) }), "alcance 7 dias"]),
         el("div", {}, [el("strong", { texto: String(soma.curtidas) }), "curtidas"]),
         el("div", {}, [el("strong", { texto: String(soma.comentarios) }), "comentários"]),
         el("div", {}, [el("strong", { texto: String(j.midias.filter(function (m) { return Date.parse(m.timestamp) >= semana; }).length) }), "posts"])
       ]));
+      if (j.avisoMetricas) $("resumoConta").appendChild(el("p", { classe: "problemas", texto: j.avisoMetricas }));
       j.midias.forEach(function (m) {
         var card = el("article", { classe: "mkt-card" }, [
           el("div", { classe: "topo-card" }, [el("span", { classe: "quando", texto: dataBonita(m.timestamp) + " · " + (m.media_type || "").toLowerCase() }),
             el("a", { href: m.permalink, target: "_blank", rel: "noopener", texto: "abrir" })]),
           el("div", { classe: "texto", texto: m.caption || "" }),
           el("div", { classe: "mkt-metricas" }, [
-            el("div", {}, [el("strong", { texto: m.alcance == null ? "–" : String(m.alcance) }), "alcance"]),
+            el("div", {}, [el("strong", { texto: m.visualizacoes != null ? String(m.visualizacoes) : m.alcance == null ? "–" : String(m.alcance) }), m.visualizacoes != null ? "views" : "alcance"]),
             el("div", {}, [el("strong", { texto: String(m.like_count || 0) }), "curtidas"]),
             el("div", {}, [el("strong", { texto: String(m.comments_count || 0) }), "coment."]),
             el("div", {}, [el("strong", { texto: m.salvos == null ? "–" : String(m.salvos) }), "salvos"])
@@ -366,6 +381,57 @@
     api("config", { contexto: $("cfgContexto").value, kit: $("cfgKit").value, autoResponder: $("cfgAuto").checked })
       .then(function () { aviso("Ajustes salvos."); }).catch(function (err) { aviso(err.message); }).then(volta);
   });
+
+  // ------------------------------------------------------------ estratégia
+  function lista(titulo, itens) {
+    if (!itens || !itens.length) return null;
+    return el("div", {}, [el("h3", { texto: titulo }), el("ul", {}, itens.map(function (t) { return el("li", { texto: t }); }))]);
+  }
+  $("btnDiagnostico").addEventListener("click", function (e) {
+    var volta = ocupado(e.target, "Analisando os números…");
+    var out = $("saidaDiagnostico"); out.textContent = "";
+    api("diagnostico", {}).then(function (d) {
+      out.appendChild(el("div", { classe: "mkt-diag" }, [el("p", { texto: d.resumo }), lista("O QUE ESTÁ TRAVANDO", d.problemas), lista("FAZER NOS PRÓXIMOS 7 DIAS", d.acoes), lista("METAS PARA 30 DIAS", d.metas)]));
+    }).catch(function (err) { aviso(err.message); }).then(volta);
+  });
+  $("btnPlano").addEventListener("click", function (e) {
+    var volta = ocupado(e.target, "Criando o plano (pode levar 1 minuto)…");
+    api("plano", { foco: $("planoFoco").value, quantidade: Number($("planoQtd").value) }).then(function (j) {
+      aviso("✔ " + j.posts.length + " rascunhos criados com roteiro. Revise em Posts → Rascunhos, coloque a arte/vídeo e aprove.");
+      return carregar().then(function () {
+        estado.filtro = "rascunho";
+        document.querySelectorAll("#filtros button").forEach(function (x) { x.setAttribute("aria-pressed", x.dataset.filtro === "rascunho" ? "true" : "false"); });
+        desenharPosts(); abrirAba("posts");
+      });
+    }).catch(function (err) { aviso(err.message); }).then(volta);
+  });
+  function carregarLinks() {
+    return api("links").then(function (j) {
+      var box = $("listaLinks"); box.textContent = "";
+      var cods = Object.keys(j.links || {});
+      if (!cods.length) { box.appendChild(el("p", { classe: "nota", texto: "Nenhum link ainda. Crie um para a bio do Instagram (ex.: bio-tecnicos)." })); return; }
+      cods.forEach(function (c) {
+        var l = j.links[c], url = j.base + c;
+        var hoje = Object.keys(l.dias || {}).sort().slice(-1)[0];
+        box.appendChild(el("div", { classe: "mkt-link" }, [
+          el("div", {}, [el("div", { texto: l.nome }), el("code", { texto: url })]),
+          el("div", { style: "text-align:right" }, [el("strong", { texto: String(l.total || 0) }), el("div", { classe: "nota", texto: "cliques" + (hoje ? " · último dia " + hoje.split("-").reverse().slice(0, 2).join("/") + ": " + l.dias[hoje] : "") }),
+            el("button", { classe: "botao", type: "button", texto: "Copiar", onclick: function (ev) {
+              (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(function () { ev.target.textContent = "Copiado"; }, function () { aviso(url); });
+            } })])
+        ]));
+      });
+    }).catch(function (err) { aviso(err.message); });
+  }
+  $("btnLink").addEventListener("click", function (e) {
+    var nome = $("linkNome").value.trim();
+    if (!nome) { aviso("Dê um nome ao link (ex.: bio-tecnicos)."); return; }
+    var op = $("linkDestino").selectedOptions[0];
+    var volta = ocupado(e.target, "Criando…");
+    api("link", { nome: nome, destino: op.value, foco: op.dataset.foco }).then(function (j) { $("linkNome").value = ""; aviso("Link criado: /r/" + j.codigo); return carregarLinks(); })
+      .catch(function (err) { aviso(err.message); }).then(volta);
+  });
+  document.querySelector('[data-aba="estrategia"]').addEventListener("click", carregarLinks);
 
   $("btnConectarMeta").addEventListener("click", function (e) {
     var volta = ocupado(e.target, "Abrindo a Meta…");

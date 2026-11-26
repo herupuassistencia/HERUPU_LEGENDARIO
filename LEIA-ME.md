@@ -63,3 +63,9 @@ Painel em `https://ia.herupusistemas.com.br/marketing.html` (botão **Marketing*
 
 Configuração no `.env`: `MKT_SENHA`, `META_PAGE_ID`, `META_PAGE_TOKEN`, `META_IG_ID` (veja `env-exemplo.txt`).
 Os dados ficam em `dados/` (fora do Git). Faça backup dessa pasta junto com o `.env`.
+
+### Estratégia viral (aba ✦ Estratégia)
+- **Diagnóstico:** a IA lê os números reais do Instagram e dos links e diz o que trava o alcance e o que fazer em 7 dias.
+- **Plano da semana:** cria rascunhos com formato (Reels/carrossel/imagem/story), gancho, roteiro cena a cena, ideia de arte
+  e legenda, sem repetir o que já foi publicado. O conhecimento da IA (produtos e regras de viralização) fica em `estrategia.js`.
+- **Links rastreáveis:** `https://ia.herupusistemas.com.br/r/<nome>` conta cada clique e leva ao destino (cadastro, app, WhatsApp).

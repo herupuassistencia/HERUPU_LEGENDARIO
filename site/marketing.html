@@ -38,6 +38,7 @@
   <div id="telaPainel" hidden>
     <nav class="mkt-abas" role="tablist">
       <button type="button" data-aba="posts" aria-selected="true">Posts</button>
+      <button type="button" data-aba="estrategia" aria-selected="false">✦ Estratégia</button>
       <button type="button" data-aba="novo" aria-selected="false">Novo</button>
       <button type="button" data-aba="comentarios" aria-selected="false">Comentários</button>
       <button type="button" data-aba="relatorio" aria-selected="false">Relatório</button>
@@ -57,9 +58,56 @@
       <div id="listaPosts"></div>
     </main>
 
+    <main class="mkt-vista" id="aba-estrategia" hidden>
+      <section class="painel">
+        <h2 class="titulo-secao">DIAGNÓSTICO DAS REDES</h2>
+        <p class="nota">A IA lê os números reais do Instagram e dos seus links e diz, com sinceridade, o que está travando e o que fazer.</p>
+        <button type="button" class="botao largo" id="btnDiagnostico">FAZER DIAGNÓSTICO</button>
+        <div id="saidaDiagnostico"></div>
+      </section>
+      <section class="painel">
+        <h2 class="titulo-secao">PLANO DA SEMANA (VIRAL)</h2>
+        <p class="nota">Cria posts novos com gancho, roteiro de Reel cena a cena, texto dos slides, ideia de arte e legenda. Tudo entra como rascunho para você revisar.</p>
+        <label for="planoFoco">Foco</label>
+        <select id="planoFoco">
+          <option value="tecnicos">Captar técnicos (app HERUPU Técnico)</option>
+          <option value="clientes">Captar clientes (app HERUPU Cliente)</option>
+          <option value="solar">Energia solar (Macapá e Amapá)</option>
+          <option value="sistemas">HERUPU SISTEMAS (malharias e comunicação visual)</option>
+          <option value="misto">Marca em geral</option>
+        </select>
+        <label for="planoQtd">Quantos posts</label>
+        <select id="planoQtd"><option>5</option><option selected>7</option><option>10</option></select>
+        <button type="button" class="botao principal largo" id="btnPlano">✦ CRIAR PLANO DA SEMANA</button>
+      </section>
+      <section class="painel">
+        <h2 class="titulo-secao">LINKS RASTREÁVEIS</h2>
+        <p class="nota">Use estes links na bio, nos stories e no WhatsApp: cada clique é contado. Assim você sabe o que traz cadastro.</p>
+        <label for="linkNome">Nome do link</label>
+        <input id="linkNome" type="text" placeholder="Ex.: bio-tecnicos">
+        <label for="linkDestino">Para onde vai</label>
+        <select id="linkDestino">
+          <option value="https://tecnico.herupusistemas.com.br" data-foco="tecnicos">Cadastro do técnico</option>
+          <option value="https://cliente.herupusistemas.com.br" data-foco="clientes">App do cliente</option>
+          <option value="https://wa.me/5596984153280" data-foco="solar">WhatsApp da HERUPU</option>
+          <option value="https://herupusistemas.com.br" data-foco="sistemas">Site HERUPU SISTEMAS</option>
+        </select>
+        <button type="button" class="botao largo" id="btnLink">CRIAR LINK</button>
+        <div id="listaLinks"></div>
+      </section>
+    </main>
+
     <main class="mkt-vista" id="aba-novo" hidden>
       <section class="painel">
         <h2 class="titulo-secao" id="tituloEditor">NOVO POST</h2>
+        <label for="formato">Formato</label>
+        <select id="formato">
+          <option value="imagem">Imagem</option>
+          <option value="carrossel">Carrossel</option>
+          <option value="reels">Reels (vídeo)</option>
+          <option value="story">Story</option>
+        </select>
+        <div id="roteiroEditor" class="mkt-roteiro" hidden></div>
         <label>Onde publicar</label>
         <div class="mkt-redes">
           <label class="linha-check"><input type="checkbox" id="redeInstagram" checked> Instagram</label>
