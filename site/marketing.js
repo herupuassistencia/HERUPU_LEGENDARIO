@@ -84,6 +84,7 @@
         ? "Conectado à Página " + j.conexao.pagina + (j.conexao.instagram ? " e ao Instagram @" + j.conexao.instagram : "") + " desde " + dataBonita(j.conexao.em) + "."
         : (j.meta ? "Conectado pelas chaves do servidor (.env)." : "Ainda não conectado.");
       $("btnConectarMeta").hidden = !j.podeConectar;
+      if (!j.conexao) $("blocoSegredo").open = !j.podeConectar;
       if (!j.podeConectar && !j.meta) $("statusMeta").textContent += " Para usar o botão, o servidor precisa de META_APP_ID e META_APP_SECRET no .env.";
       if (!j.meta) c.appendChild(el("span", { texto: "  · conecte em Ajustes" }));
       $("cfgContexto").value = j.config.contexto || "";
@@ -369,6 +370,15 @@
   $("btnConectarMeta").addEventListener("click", function (e) {
     var volta = ocupado(e.target, "Abrindo a Meta…");
     api("meta/iniciar", {}).then(function (j) { location.href = j.url; }).catch(function (err) { aviso(err.message); volta(); });
+  });
+  $("btnSegredo").addEventListener("click", function (e) {
+    var v = $("segredoMeta").value.trim();
+    if (!v) { aviso("Cole a Chave Secreta primeiro."); return; }
+    var volta = ocupado(e.target, "Conferindo com a Meta…");
+    api("meta/segredo", { segredo: v }).then(function () {
+      $("segredoMeta").value = ""; $("blocoSegredo").open = false;
+      aviso("✔ Chave Secreta conferida e salva. Agora toque em CONECTAR INSTAGRAM / FACEBOOK."); return carregar();
+    }).catch(function (err) { aviso(err.message); }).then(volta);
   });
   $("btnTrocarSenha").addEventListener("click", function (e) {
     var nova = $("senhaNova").value;

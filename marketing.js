@@ -46,6 +46,25 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
   // guarda o que veio do .env, para a conexão do painel não sobrescrever valores colocados à mão
   for (const k of ["META_PAGE_ID", "META_PAGE_TOKEN", "META_IG_ID"]) if (process.env[k]) process.env["_ENV_" + k] = "1";
   let conexaoMeta = aplicarConexaoMeta();
+  // chave secreta do app colada pelo painel (guardada só no servidor)
+  const ARQ_APP = path.join(DIR_DADOS, "meta-app.json");
+  try {
+    const a = JSON.parse(fs.readFileSync(ARQ_APP, "utf8"));
+    if (a.segredo) process.env.META_APP_SECRET = a.segredo;
+    if (a.appId && !process.env.META_APP_ID) process.env.META_APP_ID = a.appId;
+    if (a.configId && !process.env.META_LOGIN_CONFIG_ID) process.env.META_LOGIN_CONFIG_ID = a.configId;
+  } catch { /* ainda não colada */ }
+  async function salvarSegredoApp(segredo) {
+    segredo = String(segredo || "").replace(/\s+/g, "");
+    if (!/^[0-9a-f]{32}$/.test(segredo)) throw new Error("Isso não parece a Chave Secreta: ela tem 32 caracteres, só números e letras de a até f. Confira se não copiou o ID do app.");
+    const appId = env("META_APP_ID");
+    if (!appId) throw new Error("Falta META_APP_ID no .env.");
+    const r = await fetch(`https://graph.facebook.com/${V()}/oauth/access_token?` + new URLSearchParams({ client_id: appId, client_secret: segredo, grant_type: "client_credentials" }), { signal: AbortSignal.timeout(15000) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.access_token) throw new Error("A Meta recusou essa Chave Secreta. Copie de novo em Configurações do app → Básico → Mostrar.");
+    fs.writeFileSync(ARQ_APP, JSON.stringify({ appId, configId: env("META_LOGIN_CONFIG_ID"), segredo, em: new Date().toISOString() }), { mode: 0o600 });
+    process.env.META_APP_SECRET = segredo;
+  }
 
   const env = (k, padrao = "") => process.env[k] || padrao;
   const SENHA = () => env("MKT_SENHA");
@@ -442,6 +461,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
         meta: metaPronta(), instagram: Boolean(env("META_IG_ID")), facebook: Boolean(env("META_PAGE_ID")),
         conexao: conexaoMeta ? { pagina: conexaoMeta.pageNome, instagram: conexaoMeta.igUsuario, em: conexaoMeta.conectadoEm } : null,
         podeConectar: Boolean(env("META_APP_ID") && env("META_APP_SECRET")),
+        temAppId: Boolean(env("META_APP_ID")),
         urlPublica: URL_PUBLICA(), config: db.config,
         posts: db.posts.slice().sort((a, b) => Date.parse(b.atualizadoEm) - Date.parse(a.atualizadoEm)).slice(0, 200)
           .map((p) => Object.assign({}, p, { problemas: problemasDoPost(p) })),
@@ -504,6 +524,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     }
     if (url === "/api/mkt/ignorar") { db.respondidos[String(corpo.id || "")] = "ignorado"; salvar(); return enviarJson(res, 200, { ok: true }); }
     if (url === "/api/mkt/relatorio") return enviarJson(res, 200, await relatorio());
+    if (url === "/api/mkt/meta/segredo") { await salvarSegredoApp(corpo.segredo); return enviarJson(res, 200, { ok: true }); }
     if (url === "/api/mkt/meta/iniciar") return enviarJson(res, 200, { url: iniciarConexaoMeta() });
     if (url === "/api/mkt/senha") {
       const nova = String(corpo.nova || "");

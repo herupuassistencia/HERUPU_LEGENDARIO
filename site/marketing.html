@@ -119,6 +119,14 @@
         <p class="nota" id="statusMeta">Verificando…</p>
         <button type="button" class="botao principal largo" id="btnConectarMeta">CONECTAR INSTAGRAM / FACEBOOK</button>
         <p class="nota">Abre o login da Meta. Marque a Página da empresa e o Instagram @herupuassistencia e confirme.</p>
+        <details class="avancado" id="blocoSegredo">
+          <summary>Chave Secreta do app da Meta</summary>
+          <p class="nota">Só precisa uma vez (ou se a conexão der "Error validating client secret"). No celular, abra
+            <a href="https://developers.facebook.com/apps/2347322309439453/settings/basic/" target="_blank" rel="noopener">Configurações do app → Básico</a>,
+            toque em <strong>Mostrar</strong> ao lado de "Chave Secreta do Aplicativo", copie e cole aqui. O servidor confere com a Meta antes de salvar.</p>
+          <input id="segredoMeta" type="password" placeholder="Chave Secreta (32 caracteres)" autocomplete="off">
+          <button type="button" class="botao largo" id="btnSegredo">SALVAR CHAVE SECRETA</button>
+        </details>
       </section>
       <section class="painel">
         <h2 class="titulo-secao">TROCAR SENHA DO PAINEL</h2>
