@@ -9,7 +9,8 @@
  *   MKT_SENHA         senha do painel de marketing (obrigatória — sem ela o módulo fica desligado)
  *   META_PAGE_ID      ID da Página do Facebook
  *   META_PAGE_TOKEN   token de acesso da Página (de longa duração)
- *   META_IG_ID        ID da conta do Instagram profissional ligada à Página
+ *   META_IG_ID        ID da conta do Instagram profissional ligada à Página (aceita também META_IG_USER_ID)
+ *   META_IG_TOKEN     opcional: token próprio do Instagram (se começar com "IG", usa graph.instagram.com)
  *   META_GRAPH_VERSAO versão da Graph API (padrão v23.0)
  *   MKT_URL_PUBLICA   endereço público deste servidor (padrão https://ia.herupusistemas.com.br)
  *
@@ -28,9 +29,11 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
 
   const env = (k, padrao = "") => process.env[k] || padrao;
   const SENHA = () => env("MKT_SENHA");
-  const V = () => env("META_GRAPH_VERSAO", "v23.0");
+  const V = () => env("META_GRAPH_VERSAO", env("META_GRAPH_VERSION", "v23.0"));
+  if (!process.env.META_IG_ID && process.env.META_IG_USER_ID) process.env.META_IG_ID = process.env.META_IG_USER_ID;
   const URL_PUBLICA = () => env("MKT_URL_PUBLICA", "https://ia.herupusistemas.com.br").replace(/\/+$/, "");
-  const metaPronta = () => Boolean(env("META_PAGE_TOKEN") && (env("META_IG_ID") || env("META_PAGE_ID")));
+  const metaPronta = () => Boolean((env("META_PAGE_TOKEN") || env("META_IG_TOKEN")) && (env("META_IG_ID") || env("META_PAGE_ID")));
+  const IG = { ig: true };
 
   const CONTEXTO_PADRAO =
     "HERUPU é uma plataforma de atendimento por aplicativo, em lançamento nacional. " +
@@ -81,12 +84,16 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
   }
 
   // ------------------------------------------------------------ Graph API (Meta)
-  async function graph(metodo, caminho, params = {}) {
-    const url = new URL(`https://graph.facebook.com/${V()}/${caminho}`);
+  async function graph(metodo, caminho, params = {}, opcoes = {}) {
+    // Instagram: usa o token próprio do Instagram se existir; token "IG..." (login do Instagram) fala com graph.instagram.com
+    const token = opcoes.ig ? (env("META_IG_TOKEN") || env("META_PAGE_TOKEN")) : env("META_PAGE_TOKEN");
+    if (!token) throw new Error(opcoes.ig ? "Falta o token do Instagram no .env." : "Falta META_PAGE_TOKEN no .env.");
+    const host = opcoes.ig && /^IG/.test(token) ? "graph.instagram.com" : "graph.facebook.com";
+    const url = new URL(`https://${host}/${V()}/${caminho}`);
     const corpo = new URLSearchParams();
     const alvo = metodo === "GET" ? url.searchParams : corpo;
     for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null) alvo.append(k, typeof v === "object" ? JSON.stringify(v) : String(v));
-    alvo.append("access_token", env("META_PAGE_TOKEN"));
+    alvo.append("access_token", token);
     const r = await fetch(url, { method: metodo, body: metodo === "GET" ? undefined : corpo, signal: AbortSignal.timeout(60000) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok || j.error) {
@@ -107,7 +114,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
 
   async function esperarContainer(id) {
     for (let i = 0; i < 30; i++) {
-      const j = await graph("GET", id, { fields: "status_code,status" });
+      const j = await graph("GET", id, { fields: "status_code,status" }, IG);
       if (j.status_code === "FINISHED") return;
       if (j.status_code === "ERROR" || j.status_code === "EXPIRED") throw new Error("O Instagram recusou a mídia: " + (j.status || j.status_code));
       await dormir(3000);
@@ -122,17 +129,17 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     if (!urls.length) throw new Error("O Instagram exige pelo menos uma imagem.");
     let criacao;
     if (urls.length === 1) {
-      criacao = (await graph("POST", `${ig}/media`, { image_url: urls[0], caption: post.legenda })).id;
+      criacao = (await graph("POST", `${ig}/media`, { image_url: urls[0], caption: post.legenda }, IG)).id;
     } else {
       const filhos = [];
-      for (const u of urls) filhos.push((await graph("POST", `${ig}/media`, { image_url: u, is_carousel_item: "true" })).id);
+      for (const u of urls) filhos.push((await graph("POST", `${ig}/media`, { image_url: u, is_carousel_item: "true" }, IG)).id);
       for (const f of filhos) await esperarContainer(f);
-      criacao = (await graph("POST", `${ig}/media`, { media_type: "CAROUSEL", children: filhos.join(","), caption: post.legenda })).id;
+      criacao = (await graph("POST", `${ig}/media`, { media_type: "CAROUSEL", children: filhos.join(","), caption: post.legenda }, IG)).id;
     }
     await esperarContainer(criacao);
-    const pub = await graph("POST", `${ig}/media_publish`, { creation_id: criacao });
+    const pub = await graph("POST", `${ig}/media_publish`, { creation_id: criacao }, IG);
     let link = "";
-    try { link = (await graph("GET", pub.id, { fields: "permalink" })).permalink || ""; } catch { /* sem link */ }
+    try { link = (await graph("GET", pub.id, { fields: "permalink" }, IG)).permalink || ""; } catch { /* sem link */ }
     return { id: pub.id, link };
   }
 
@@ -241,17 +248,17 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
   // ------------------------------------------------------------ comentários
   let usuarioIG = null;
   async function meuUsuarioIG() {
-    if (!usuarioIG) usuarioIG = (await graph("GET", env("META_IG_ID"), { fields: "username" })).username || "";
+    if (!usuarioIG) usuarioIG = (await graph("GET", env("META_IG_ID"), { fields: "username" }, IG)).username || "";
     return usuarioIG;
   }
   async function comentariosPendentes() {
     const ig = env("META_IG_ID");
     if (!ig) throw new Error("Falta META_IG_ID no .env.");
     const eu = await meuUsuarioIG();
-    const midias = (await graph("GET", `${ig}/media`, { fields: "id,caption,permalink,timestamp,comments_count", limit: 15 })).data || [];
+    const midias = (await graph("GET", `${ig}/media`, { fields: "id,caption,permalink,timestamp,comments_count", limit: 15 }, IG)).data || [];
     const saida = [];
     for (const m of midias.filter((x) => x.comments_count > 0)) {
-      const cs = (await graph("GET", `${m.id}/comments`, { fields: "id,text,username,timestamp,replies{username}", limit: 50 })).data || [];
+      const cs = (await graph("GET", `${m.id}/comments`, { fields: "id,text,username,timestamp,replies{username}", limit: 50 }, IG)).data || [];
       for (const c of cs) {
         if (c.username === eu || db.respondidos[c.id]) continue;
         if ((c.replies && c.replies.data || []).some((r) => r.username === eu)) continue;
@@ -261,7 +268,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     return saida.sort((a, b) => Date.parse(b.quando) - Date.parse(a.quando));
   }
   async function responderComentario(id, texto) {
-    await graph("POST", `${id}/replies`, { message: texto });
+    await graph("POST", `${id}/replies`, { message: texto }, IG);
     db.respondidos[id] = new Date().toISOString();
     salvar();
   }
@@ -279,13 +286,13 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
   async function relatorio() {
     const ig = env("META_IG_ID");
     if (!ig) throw new Error("Falta META_IG_ID no .env.");
-    const conta = await graph("GET", ig, { fields: "username,followers_count,media_count" });
-    const midias = (await graph("GET", `${ig}/media`, { fields: "id,caption,timestamp,like_count,comments_count,permalink,media_type", limit: 20 })).data || [];
+    const conta = await graph("GET", ig, { fields: "username,followers_count,media_count" }, IG);
+    const midias = (await graph("GET", `${ig}/media`, { fields: "id,caption,timestamp,like_count,comments_count,permalink,media_type", limit: 20 }, IG)).data || [];
     for (const m of midias) {
       m.alcance = null;
       for (const metricas of ["reach,saved,shares", "reach"]) {
         try {
-          const ins = (await graph("GET", `${m.id}/insights`, { metric: metricas })).data || [];
+          const ins = (await graph("GET", `${m.id}/insights`, { metric: metricas }, IG)).data || [];
           for (const i of ins) m[{ reach: "alcance", saved: "salvos", shares: "compartilhamentos" }[i.name] || i.name] = i.values && i.values[0] ? i.values[0].value : i.total_value && i.total_value.value;
           break;
         } catch { /* métrica não disponível para esse tipo de post */ }

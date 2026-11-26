@@ -15,6 +15,7 @@ MKT_SENHA=crie_uma_senha
 META_PAGE_ID=
 META_PAGE_TOKEN=
 META_IG_ID=
+META_IG_TOKEN=
 # Opcionais:
 # META_GRAPH_VERSAO=v23.0
 # MKT_URL_PUBLICA=https://ia.herupusistemas.com.br
