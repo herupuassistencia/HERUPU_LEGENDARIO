@@ -500,7 +500,12 @@
       "O rascunho nunca é publicado sozinho: o Aécio confere, coloca a imagem e aprova no painel. Diga isso de forma curta na fala. " +
       "{\"tipo\":\"marketing\"} abre o painel de marketing (posts, agenda, comentários, relatório). " +
       (NAT ? "No app Android também: {\"tipo\":\"abrir_app\",\"nome\":\"YouTube\"}, {\"tipo\":\"alarme\",\"hora\":7,\"minuto\":30,\"mensagem\":\"...\"}, " +
-        "{\"tipo\":\"timer\",\"segundos\":300}, {\"tipo\":\"lanterna\",\"ligar\":true}. " : "") +
+        "{\"tipo\":\"timer\",\"segundos\":300}, {\"tipo\":\"lanterna\",\"ligar\":true}, " +
+        "{\"tipo\":\"musica\",\"busca\":\"Linkin Park\",\"app\":\"spotify ou youtube\"} (abre e toca música), " +
+        "{\"tipo\":\"volume\",\"acao\":\"aumentar|diminuir|mudo\"}, {\"tipo\":\"navegar\",\"acao\":\"voltar|inicio|recentes|notificacoes\"}, " +
+        "{\"tipo\":\"tocar\",\"nome\":\"texto do botão na tela\"}, {\"tipo\":\"escrever\",\"texto\":\"...\"}, {\"tipo\":\"rolar\",\"direcao\":\"baixo|cima\"}, " +
+        "{\"tipo\":\"ler_tela\"}. Você controla o celular do Aécio com permissão dele: abra apps, toque e escreva quando ele pedir. " +
+        "NUNCA toque em confirmar pagamento, transferir, Pix, comprar ou apagar sem ele ter pedido exatamente isso. " : "") +
       "Nunca invente números de telefone: se faltar, pergunte. As ações só ABREM o app certo; o usuário confirma o envio ou a ligação. " +
       "Data e hora agora: " + new Date().toLocaleString("pt-BR") + ".";
   }
@@ -620,6 +625,7 @@
     F("encerrar_conversa", "Encerra a conversa ao vivo quando o usuário se despedir ou mandar descansar.")
   ];
   if (NAT) FUNCOES_AO_VIVO.push(
+    F("tocar_musica", "Abre e toca uma música, artista ou playlist no Spotify ou YouTube Music.", { busca: TXT("Música, artista ou playlist"), app: TXT("spotify ou youtube (opcional)") }, ["busca"]),
     F("abrir_app", "Abre um aplicativo instalado no celular pelo nome (ex.: YouTube, Spotify, Instagram, Câmera, Calculadora).", { nome: TXT("Nome do app") }, ["nome"]),
     F("criar_alarme", "Cria um alarme no relógio do celular.", { hora: NUM("Hora (0 a 23)"), minuto: NUM("Minuto (0 a 59)"), mensagem: TXT("Nome do alarme") }, ["hora", "minuto"]),
     F("iniciar_timer", "Inicia um timer (contagem regressiva) no celular.", { segundos: NUM("Duração em segundos"), mensagem: TXT("Nome do timer") }, ["segundos"]),
@@ -634,6 +640,7 @@
   );
   function ferramentaAoVivo(nome, a) {
     var B = window.HerupuBiblia;
+    if (nome === "tocar_musica") return nativo("tocarMusica", { busca: a.busca, app: a.app || "" }).then(function (r) { return r.mensagem; });
     if (nome === "abrir_app") return nativo("abrirApp", { nome: a.nome }).then(function (r) { return r.ok ? "Abri o " + r.app + "." : r.mensagem; });
     if (nome === "criar_alarme") return nativo("alarme", { hora: Number(a.hora) || 0, minuto: Number(a.minuto) || 0, mensagem: a.mensagem || "HERUPU" }).then(function (r) { return r.mensagem; });
     if (nome === "iniciar_timer") return nativo("timer", { segundos: Number(a.segundos) || 60, mensagem: a.mensagem || "HERUPU" }).then(function (r) { return r.mensagem; });
@@ -743,10 +750,16 @@
       mudarEstado("falando");
       return falar(r.fala).then(function () {
         var ac = r.acao;
-        if (ac && NAT && /^(abrir_app|alarme|timer|lanterna)$/.test(ac.tipo)) {
+        if (ac && NAT && /^(abrir_app|alarme|timer|lanterna|musica|volume|navegar|tocar|escrever|rolar|ler_tela)$/.test(ac.tipo)) {
           var mapa = { abrir_app: ["abrirApp", { nome: ac.nome }], alarme: ["alarme", { hora: Number(ac.hora) || 0, minuto: Number(ac.minuto) || 0, mensagem: ac.mensagem || "HERUPU" }],
-            timer: ["timer", { segundos: Number(ac.segundos) || 60 }], lanterna: ["lanterna", { ligar: ac.ligar !== false }] }[ac.tipo];
-          return nativo(mapa[0], mapa[1]).then(function (res) { if (res && res.ok === false && res.mensagem) adicionarMensagem("ia", res.mensagem); });
+            timer: ["timer", { segundos: Number(ac.segundos) || 60 }], lanterna: ["lanterna", { ligar: ac.ligar !== false }],
+            musica: ["tocarMusica", { busca: ac.busca || ac.nome || "", app: ac.app || "" }], volume: ["volume", { acao: ac.acao || "", nivel: ac.nivel }],
+            navegar: ["navegar", { acao: ac.acao }], tocar: ["tocarNaTela", { nome: ac.nome }], escrever: ["escreverNaTela", { texto: ac.texto }],
+            rolar: ["rolarTela", { direcao: ac.direcao || "baixo" }], ler_tela: ["lerTela", {}] }[ac.tipo];
+          return nativo(mapa[0], mapa[1]).then(function (res) {
+            if (ac.tipo === "ler_tela" && res && res.texto) return falar(String(res.texto).slice(0, 600));
+            if (res && res.ok === false && res.mensagem) adicionarMensagem("ia", res.mensagem);
+          }).catch(function (e) { adicionarMensagem("ia", e.message); });
         }
         if (r.acao && /^(biblia|devocional|plano)$/.test(r.acao.tipo) && window.HerupuBiblia) {
           emConversa = false;

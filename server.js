@@ -51,7 +51,7 @@ const TIPOS = {
   ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8",
   ".webmanifest": "application/manifest+json; charset=utf-8", ".svg": "image/svg+xml",
   ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".ico": "image/x-icon",
-  ".mp3": "audio/mpeg", ".mp4": "video/mp4", ".woff2": "font/woff2", ".map": "application/json",
+  ".mp3": "audio/mpeg", ".mp4": "video/mp4", ".apk": "application/vnd.android.package-archive", ".woff2": "font/woff2", ".map": "application/json",
 };
 
 function enviarJson(res, status, obj) {

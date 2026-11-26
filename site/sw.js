@@ -1,6 +1,6 @@
 // Service worker do HERUPU Mobile: guarda a "casca" do app para abrir rápido e funcionar como app instalado.
 // As conversas com o cérebro sempre vão para a internet.
-const VERSAO = "herupu-v29";
+const VERSAO = "herupu-v30";
 const CASCA = ["./", "index.html", "estilo.css", "nucleo.js", "app.js", "aovivo.js", "biblia.js", "manifest.webmanifest", "icone.svg", "icone-192.png", "icone-512.png"];
 
 self.addEventListener("install", (e) => {
@@ -12,7 +12,7 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.origin !== location.origin) return; // cérebro e fontes: direto na rede
-  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/midia/")) return; // dados do marketing: nunca no cache
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/midia/") || url.pathname.endsWith(".apk")) return; // dados do marketing: nunca no cache
   e.respondWith(
     fetch(e.request).then((resp) => {
       const copia = resp.clone();
