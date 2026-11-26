@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Marketing · HERUPU LEGENDÁRIO</title>
+<meta name="theme-color" content="#050507">
+<meta name="robots" content="noindex">
+<link rel="icon" href="icone.svg" type="image/svg+xml">
+<link rel="stylesheet" href="estilo.css">
+<link rel="stylesheet" href="marketing.css">
+</head>
+<body>
+<div class="tela mkt">
+
+  <header class="topo">
+    <div class="marca">
+      <span class="marca-nome">AGENTE DE MARKETING</span>
+      <span class="marca-sub">HERUPU LEGENDÁRIO</span>
+    </div>
+    <a class="estado" href="./">‹ Assistente</a>
+  </header>
+
+  <!-- login -->
+  <main id="telaLogin" class="mkt-vista" hidden>
+    <section class="painel">
+      <h2 class="titulo-secao">ENTRAR</h2>
+      <p class="nota">Digite a senha do marketing (MKT_SENHA, a que você colocou no .env do servidor).</p>
+      <form id="formLogin" autocomplete="off">
+        <input id="senha" type="password" placeholder="Senha do marketing" autocomplete="current-password">
+        <button class="botao principal largo" type="submit">ENTRAR</button>
+      </form>
+      <p class="aviso" id="avisoLogin" hidden></p>
+    </section>
+  </main>
+
+  <!-- painel -->
+  <div id="telaPainel" hidden>
+    <nav class="mkt-abas" role="tablist">
+      <button type="button" data-aba="posts" aria-selected="true">Posts</button>
+      <button type="button" data-aba="novo" aria-selected="false">Novo</button>
+      <button type="button" data-aba="comentarios" aria-selected="false">Comentários</button>
+      <button type="button" data-aba="relatorio" aria-selected="false">Relatório</button>
+      <button type="button" data-aba="ajustes" aria-selected="false">Ajustes</button>
+    </nav>
+    <p class="aviso" id="avisoGeral" hidden></p>
+    <p class="mkt-conexao" id="conexao"></p>
+
+    <main class="mkt-vista" id="aba-posts">
+      <div class="mkt-filtros" id="filtros">
+        <button type="button" data-filtro="todos" aria-pressed="true">Todos</button>
+        <button type="button" data-filtro="rascunho" aria-pressed="false">Rascunhos</button>
+        <button type="button" data-filtro="aprovado" aria-pressed="false">Agendados</button>
+        <button type="button" data-filtro="publicado" aria-pressed="false">Publicados</button>
+        <button type="button" data-filtro="erro" aria-pressed="false">Com erro</button>
+      </div>
+      <div id="listaPosts"></div>
+    </main>
+
+    <main class="mkt-vista" id="aba-novo" hidden>
+      <section class="painel">
+        <h2 class="titulo-secao" id="tituloEditor">NOVO POST</h2>
+        <label>Onde publicar</label>
+        <div class="mkt-redes">
+          <label class="linha-check"><input type="checkbox" id="redeInstagram" checked> Instagram</label>
+          <label class="linha-check"><input type="checkbox" id="redeFacebook"> Facebook</label>
+        </div>
+        <p class="nota">TikTok e Google entram na próxima etapa.</p>
+
+        <label for="tema">Sobre o que é o post</label>
+        <input id="tema" type="text" placeholder="Ex.: técnicos de refrigeração, seja o primeiro na sua cidade">
+        <button type="button" class="botao largo" id="btnGerar">✦ ESCREVER LEGENDA COM IA</button>
+        <p class="nota" id="ideiaImagem" hidden></p>
+
+        <label for="legenda">Legenda</label>
+        <textarea id="legenda" rows="9" maxlength="2200" placeholder="Escreva ou gere com a IA"></textarea>
+        <p class="nota"><span id="contador">0</span>/2200</p>
+
+        <label>Imagens (até 10, viram carrossel)</label>
+        <div class="mkt-midias" id="midias"></div>
+        <label class="botao largo mkt-upload">+ ADICIONAR IMAGENS
+          <input type="file" id="arquivos" accept="image/*" multiple hidden>
+        </label>
+        <p class="nota">As imagens são ajustadas sozinhas para o formato aceito pelo Instagram (JPG, entre 4:5 e 1,91:1).</p>
+
+        <label for="quando">Data e hora da publicação</label>
+        <input id="quando" type="datetime-local">
+
+        <div class="mkt-botoes">
+          <button type="button" class="botao" id="btnSalvar">SALVAR RASCUNHO</button>
+          <button type="button" class="botao principal" id="btnAprovar">APROVAR E AGENDAR</button>
+        </div>
+        <button type="button" class="botao largo" id="btnPublicarJa">PUBLICAR AGORA</button>
+        <button type="button" class="botao largo mkt-discreto" id="btnLimpar">LIMPAR / NOVO</button>
+      </section>
+    </main>
+
+    <main class="mkt-vista" id="aba-comentarios" hidden>
+      <section class="painel">
+        <h2 class="titulo-secao">COMENTÁRIOS SEM RESPOSTA</h2>
+        <p class="nota">Instagram. A IA sugere a resposta pelo seu kit; você confere e envia.</p>
+        <button type="button" class="botao largo" id="btnComentarios">ATUALIZAR</button>
+      </section>
+      <div id="listaComentarios"></div>
+    </main>
+
+    <main class="mkt-vista" id="aba-relatorio" hidden>
+      <section class="painel">
+        <h2 class="titulo-secao">RELATÓRIO DO INSTAGRAM</h2>
+        <button type="button" class="botao largo" id="btnRelatorio">GERAR RELATÓRIO</button>
+        <div id="resumoConta"></div>
+      </section>
+      <div id="listaRelatorio"></div>
+    </main>
+
+    <main class="mkt-vista" id="aba-ajustes" hidden>
+      <section class="painel">
+        <h2 class="titulo-secao">O QUE O AGENTE SABE DA EMPRESA</h2>
+        <textarea id="cfgContexto" rows="9"></textarea>
+        <label for="cfgKit">Kit de respostas para comentários</label>
+        <textarea id="cfgKit" rows="9"></textarea>
+        <label class="linha-check"><input type="checkbox" id="cfgAuto"> Responder comentários sozinho (a cada 10 min)</label>
+        <p class="nota">Reclamações e spam nunca são respondidos sozinhos: ficam para você na aba Comentários.</p>
+        <button type="button" class="botao principal largo" id="btnSalvarCfg">SALVAR</button>
+        <button type="button" class="botao largo mkt-discreto" id="btnSair">SAIR DESTE APARELHO</button>
+      </section>
+    </main>
+  </div>
+</div>
+<script src="marketing.js"></script>
+</body>
+</html>

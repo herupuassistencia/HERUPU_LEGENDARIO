@@ -6,6 +6,7 @@
  *   POST /api/token   senha temporária para a conversa AO VIVO (Gemini Live)
  *   POST /api/falar   voz natural Antonio (Microsoft), a mesma do PC
  *   GET  /saude       diz se está no ar e se a chave está configurada
+ *   /api/mkt/*        agente de marketing (ver marketing.js), protegido por MKT_SENHA
  *
  * Config por variáveis de ambiente (arquivo .env, formato CHAVE=valor):
  *   GEMINI_API_KEY         (obrigatória)
@@ -94,7 +95,7 @@ async function acharModelosTexto() {
 
 // ------------------------------------------------------------------ cérebro (modo por turnos)
 async function rotaChat(req, res) {
-  if (!CHAVE) return enviarJson(res, 500, { fala: "O servidor ainda não tem a chave do Google configurada.", acao: null });
+  if (!CHAVE && !FREELLM_KEY) return enviarJson(res, 500, { fala: "O servidor ainda não tem a chave do Google configurada.", acao: null });
   let corpo;
   try { corpo = JSON.parse(await lerCorpo(req, 8 * 1024 * 1024)); } catch { return enviarJson(res, 400, { erro: "pedido inválido" }); }
   const conteudos = (Array.isArray(corpo.historico) ? corpo.historico : []).slice(-12)
@@ -111,14 +112,20 @@ async function rotaChat(req, res) {
     contents: conteudos,
     generationConfig: { responseMimeType: "application/json", temperature: 0.6 },
   };
+  const r = await chamarCerebro(pedido);
+  if (r.ok) {
+    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+    return res.end(r.texto);
+  }
+  if (r.duro) return enviarJson(res, 502, { fala: "O cérebro não respondeu agora. Tente de novo.", acao: null });
+  return enviarJson(res, 502, { fala: "A inteligência está com muita procura neste momento e recusou o pedido. Aguarde alguns segundos e tente de novo.", acao: null, detalhe: r.erro });
+}
+
+// Cérebro compartilhado (chat e agente de marketing): FreeLLMAPI primeiro (várias IAs grátis),
+// depois os modelos do Google. Devolve { ok, texto } ou { ok:false, erro, duro }.
+async function chamarCerebro(pedido) {
   const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
   let ultimoErro = "sem resposta";
-  // modelos que a conta realmente tem agora + a lista fixa como reserva (resiliente a renomeações)
-  const descobertos = await acharModelosTexto();
-  const listaModelos = [...new Set([...descobertos, ...MODELOS])];
-  // Tenta todos os modelos. Se todos estiverem sobrecarregados ("high demand"), espera um pouco e tenta tudo de
-  // novo — a sobrecarga do Google costuma passar em alguns segundos, então insistir evita o erro em inglês na tela.
-  // FreeLLMAPI primeiro (varias IAs gratis); se falhar, segue pro Google logo abaixo
   if (FREELLM_KEY) {
     try {
       const r = await fetch(FREELLM_URL + "/v1beta/models/gemini-2.5-flash:generateContent", {
@@ -129,13 +136,15 @@ async function rotaChat(req, res) {
       });
       const j = await r.json().catch(() => ({}));
       const txt = (j?.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("");
-      if (r.ok && txt.trim()) {
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
-        return res.end(txt);
-      }
+      if (r.ok && txt.trim()) return { ok: true, texto: txt };
       console.warn("[HERUPU] FreeLLMAPI falhou:", r.status, (j.error && j.error.message) || "");
     } catch (e) { console.warn("[HERUPU] FreeLLMAPI fora do ar:", e.message); }
   }
+  if (!CHAVE) return { ok: false, erro: "sem chave do Google e FreeLLMAPI indisponível" };
+  // modelos que a conta realmente tem agora + a lista fixa como reserva (resiliente a renomeações)
+  const descobertos = await acharModelosTexto();
+  const listaModelos = [...new Set([...descobertos, ...MODELOS])];
+  // Se todos estiverem sobrecarregados ("high demand"), espera um pouco e tenta tudo de novo.
   for (let rodada = 0; rodada < 3; rodada++) {
     for (const modelo of listaModelos) {
       for (const extra of [{ thinkingConfig: { thinkingLevel: "low" } }, {}]) {
@@ -149,20 +158,19 @@ async function rotaChat(req, res) {
           const j = await r.json().catch(() => ({}));
           if (r.ok) {
             const partes = j?.candidates?.[0]?.content?.parts || [];
-            res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
-            return res.end(partes.map((p) => p.text || "").join(""));
+            return { ok: true, texto: partes.map((p) => p.text || "").join("") };
           }
           ultimoErro = `${modelo} ${r.status}: ${(j.error && j.error.message) || ""}`.slice(0, 200);
-          console.log("[HERUPU] chat:", ultimoErro);
+          console.log("[HERUPU] cérebro:", ultimoErro);
           if (r.status === 429 || r.status >= 500) break; // sobrecarga/instável: passa para o próximo modelo
-          if (r.status !== 400 && r.status !== 404) return enviarJson(res, 502, { fala: "O cérebro não respondeu agora. Tente de novo.", acao: null });
-        } catch (e) { ultimoErro = `${modelo}: ${e.message}`; console.log("[HERUPU] chat:", ultimoErro); break; }
+          if (r.status !== 400 && r.status !== 404) return { ok: false, erro: ultimoErro, duro: true };
+        } catch (e) { ultimoErro = `${modelo}: ${e.message}`; console.log("[HERUPU] cérebro:", ultimoErro); break; }
       }
     }
-    if (rodada < 2) await dormir(1200 * (rodada + 1)); // espera (1,2s e depois 2,4s) antes de tentar tudo de novo
+    if (rodada < 2) await dormir(1200 * (rodada + 1));
   }
-  modelosTextoCache = null; // falhou tudo: redescobre os modelos na próxima (caso o Google tenha mudado os nomes)
-  return enviarJson(res, 502, { fala: "A inteligência está com muita procura neste momento e recusou o pedido. Aguarde alguns segundos e tente de novo.", acao: null, detalhe: ultimoErro });
+  modelosTextoCache = null; // falhou tudo: redescobre os modelos na próxima
+  return { ok: false, erro: ultimoErro };
 }
 
 // ------------------------------------------------------------------ token da conversa ao vivo
@@ -342,8 +350,12 @@ function servirArquivo(req, res) {
   });
 }
 
+// ------------------------------------------------------------------ agente de marketing
+const marketing = require("./marketing")({ chamarCerebro, enviarJson, lerCorpo, TIPOS });
+
 const servidor = http.createServer((req, res) => {
   const url = (req.url || "").split("?")[0];
+  if (marketing.rotear(req, res, url)) return;
   if (req.method === "GET" && url === "/saude") return enviarJson(res, 200, { ok: true, chave: Boolean(CHAVE), voz: Boolean(MsEdgeTTS) });
   if (req.method === "POST" && url === "/api/chat") return rotaChat(req, res).catch(() => enviarJson(res, 500, { erro: "falha" }));
   if (req.method === "POST" && url === "/api/token") return rotaToken(req, res).catch(() => enviarJson(res, 500, { erro: "falha" }));

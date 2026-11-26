@@ -494,6 +494,11 @@
       "{\"tipo\":\"foto\"} (abre a câmera quando precisar VER algo — um objeto, um lugar, um documento, a conta de luz, o que o usuário mostrar), " +
       "{\"tipo\":\"biblia\",\"livro\":\"João\",\"capitulo\":3,\"ler\":true} (abrir um capítulo da Bíblia; ler=true quando pedir para ler em voz alta), " +
       "{\"tipo\":\"devocional\"} (devocional de hoje), {\"tipo\":\"plano\"} (planos de leitura da Bíblia). " +
+      "MARKETING (você também é o agente de marketing da empresa: Instagram e Facebook): " +
+      "{\"tipo\":\"post_marketing\",\"tema\":\"sobre o que é o post\",\"redes\":[\"instagram\"],\"quando\":\"AAAA-MM-DDTHH:MM\"} " +
+      "cria um RASCUNHO de post com legenda escrita pela IA (redes: instagram e/ou facebook; quando é opcional, no horário local). " +
+      "O rascunho nunca é publicado sozinho: o Aécio confere, coloca a imagem e aprova no painel. Diga isso de forma curta na fala. " +
+      "{\"tipo\":\"marketing\"} abre o painel de marketing (posts, agenda, comentários, relatório). " +
       (NAT ? "No app Android também: {\"tipo\":\"abrir_app\",\"nome\":\"YouTube\"}, {\"tipo\":\"alarme\",\"hora\":7,\"minuto\":30,\"mensagem\":\"...\"}, " +
         "{\"tipo\":\"timer\",\"segundos\":300}, {\"tipo\":\"lanterna\",\"ligar\":true}. " : "") +
       "Nunca invente números de telefone: se faltar, pergunte. As ações só ABREM o app certo; o usuário confirma o envio ou a ligação. " +
@@ -749,6 +754,8 @@
           return window.HerupuBiblia.executar(r.acao, function () { mostrarVista("biblia"); });
         }
         if (r.acao && r.acao.tipo === "foto") { emConversa = false; abrirCamera(); return; }
+        if (r.acao && r.acao.tipo === "marketing") { emConversa = false; location.href = "marketing.html"; return; }
+        if (r.acao && r.acao.tipo === "post_marketing") return criarRascunhoMarketing(r.acao);
         if (link) { emConversa = false; abrirLink(link); }
       });
     }).catch(function (erro) {
@@ -756,6 +763,21 @@
       emConversa = false;
       return falar("Não consegui me conectar ao cérebro.").then(voltarAVigia);
     });
+  }
+
+  // agente de marketing: cria o rascunho no servidor (a senha fica salva neste aparelho pelo painel)
+  function criarRascunhoMarketing(ac) {
+    var senhaMkt = "";
+    try { senhaMkt = localStorage.getItem("herupu-mkt-senha") || ""; } catch (e) { /* ok */ }
+    if (!senhaMkt) { adicionarMensagem("ia", "Para eu criar posts, entre uma vez no painel de Marketing (menu de baixo) com a senha."); return; }
+    var redes = (Array.isArray(ac.redes) ? ac.redes : [ac.redes || "instagram"]).map(function (x) { return String(x).toLowerCase(); });
+    var quando = ac.quando && !isNaN(Date.parse(ac.quando)) ? new Date(ac.quando).toISOString() : null;
+    return fetch("/api/mkt/rascunho-voz", {
+      method: "POST", headers: { "Content-Type": "application/json", "x-herupu-senha": senhaMkt },
+      body: JSON.stringify({ tema: String(ac.tema || ""), redes: redes, quando: quando })
+    }).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.erro || "erro " + r.status); return j; }); })
+      .then(function (p) { adicionarMensagem("ia", "Rascunho criado no Marketing:\n\n" + p.legenda, { link: "marketing.html" }); })
+      .catch(function (e) { adicionarMensagem("ia", "Não consegui criar o rascunho: " + e.message); });
   }
 
   function abrirLink(link) {

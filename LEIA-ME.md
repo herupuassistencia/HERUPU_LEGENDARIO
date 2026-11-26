@@ -47,3 +47,19 @@ sudo systemctl restart herupu-legendario
 - Ver se está no ar: `curl -s http://127.0.0.1:8790/saude`
 - Ver o registro: `journalctl -u herupu-legendario -n 50 --no-pager`
 - Reiniciar: `sudo systemctl restart herupu-legendario`
+
+## Agente de Marketing
+Painel em `https://ia.herupusistemas.com.br/marketing.html` (botão **Marketing** no menu de baixo).
+
+- Cria posts para **Instagram** e **Facebook** com legenda escrita pela IA grátis do LEGENDÁRIO.
+- Imagens são ajustadas sozinhas para o formato do Instagram (JPG, 4:5 a 1,91:1) e carrossel até 10.
+- **Agenda:** posts aprovados publicam sozinhos no horário, sem navegador e sem Claude.
+  Um post nunca é publicado duas vezes na mesma rede.
+- **Comentários:** lista os comentários sem resposta e a IA sugere a resposta pelo kit.
+  Resposta automática opcional; reclamações e spam ficam sempre para o dono.
+- **Relatório:** alcance, curtidas, comentários e salvos dos últimos posts.
+- **Por voz:** "Legendário, cria um post sobre técnicos de refrigeração para sexta às 18h" cria um **rascunho**
+  (nunca publica sozinho; você confere, coloca a imagem e aprova no painel).
+
+Configuração no `.env`: `MKT_SENHA`, `META_PAGE_ID`, `META_PAGE_TOKEN`, `META_IG_ID` (veja `env-exemplo.txt`).
+Os dados ficam em `dados/` (fora do Git). Faça backup dessa pasta junto com o `.env`.

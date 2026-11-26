@@ -1,0 +1,66 @@
+/* Agente de Marketing — complementa o estilo.css do LEGENDÁRIO */
+.mkt { padding-bottom: 32px; }
+.mkt a.estado { text-decoration: none; color: var(--azul-vivo); }
+.mkt-vista { display: flex; flex-direction: column; gap: 12px; }
+.mkt input[type="text"], .mkt input[type="password"], .mkt input[type="datetime-local"], .mkt textarea {
+  width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--borda);
+  background: var(--painel-2); color: var(--texto); font: inherit;
+}
+.mkt textarea { resize: vertical; line-height: 1.45; }
+.mkt label { display: block; margin: 14px 0 6px; font-size: 14px; }
+.mkt .linha-check { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.mkt .largo { width: 100%; margin-top: 10px; }
+.mkt-discreto { opacity: .75; }
+
+.mkt-abas { display: flex; gap: 6px; overflow-x: auto; margin: 4px 0 10px; padding-bottom: 4px; }
+.mkt-abas button, .mkt-filtros button {
+  flex: 0 0 auto; padding: 9px 14px; border-radius: 999px; border: 1px solid var(--borda);
+  background: transparent; color: var(--suave); font: inherit; font-size: 13px; cursor: pointer;
+}
+.mkt-abas button[aria-selected="true"], .mkt-filtros button[aria-pressed="true"] {
+  background: var(--azul); border-color: var(--azul-vivo); color: #fff;
+}
+.mkt-filtros { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+.mkt-conexao { margin: 0 0 8px; font-size: 13px; color: var(--suave); }
+.mkt-conexao .ok { color: #5ee08a; }
+.mkt-conexao .falta { color: #ffb45a; }
+
+.mkt-redes { display: flex; gap: 18px; flex-wrap: wrap; }
+.mkt-botoes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+.mkt-upload { text-align: center; cursor: pointer; }
+
+.mkt-midias { display: flex; gap: 8px; flex-wrap: wrap; }
+.mkt-midias figure { position: relative; margin: 0; width: 86px; height: 86px; border-radius: 10px; overflow: hidden; border: 1px solid var(--borda); }
+.mkt-midias img { width: 100%; height: 100%; object-fit: cover; }
+.mkt-midias button {
+  position: absolute; top: 3px; right: 3px; width: 26px; height: 26px; border-radius: 50%;
+  border: 0; background: rgba(0,0,0,.75); color: #fff; font-size: 15px; line-height: 26px; cursor: pointer;
+}
+.mkt-midias .carregando { display: grid; place-items: center; font-size: 12px; color: var(--suave); }
+
+.mkt-card { padding: 14px; border-radius: 14px; border: 1px solid var(--borda); background: var(--painel); margin-bottom: 10px; }
+.mkt-card .topo-card { display: flex; justify-content: space-between; gap: 8px; align-items: center; margin-bottom: 8px; }
+.mkt-card .selo { font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid currentColor; }
+.selo-rascunho { color: var(--suave); }
+.selo-aprovado { color: var(--azul-vivo); }
+.selo-publicando { color: #ffd35a; }
+.selo-publicado { color: #5ee08a; }
+.selo-erro { color: #ff6b6b; }
+.mkt-card .quando { font-size: 13px; color: var(--suave); }
+.mkt-card .texto { white-space: pre-wrap; font-size: 14px; color: var(--registro); max-height: 7.5em; overflow: hidden; }
+.mkt-card .miniaturas { display: flex; gap: 6px; margin: 8px 0; overflow-x: auto; }
+.mkt-card .miniaturas img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; flex: 0 0 auto; }
+.mkt-card .resultado { font-size: 13px; margin: 4px 0; }
+.mkt-card .resultado.ok { color: #5ee08a; }
+.mkt-card .resultado.falha { color: #ff6b6b; }
+.mkt-card .resultado a { color: var(--azul-vivo); }
+.mkt-card .problemas { font-size: 13px; color: #ffb45a; }
+.mkt-card .acoes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.mkt-card .acoes button { padding: 8px 12px; font-size: 13px; min-height: 0; }
+.mkt-card .autor { font-weight: 600; }
+.mkt-card .contexto { font-size: 12px; color: var(--suave); margin-top: 4px; }
+.mkt-card textarea { margin-top: 8px; }
+.mkt-metricas { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; text-align: center; }
+.mkt-metricas div { padding: 6px 2px; border-radius: 8px; background: var(--painel-2); font-size: 12px; color: var(--suave); }
+.mkt-metricas strong { display: block; font-size: 16px; color: var(--texto); }
+.mkt-vazio { text-align: center; color: var(--suave); padding: 24px 8px; }

@@ -115,7 +115,7 @@
   }
 
   // ------------------------------------------------------------ resposta do cérebro
-  var ACOES = ["ligar", "whatsapp", "mapa", "abrir_site", "pesquisar", "foto", "biblia", "devocional", "plano", "abrir_app", "alarme", "timer", "lanterna", "volume", "navegar", "tocar", "escrever", "rolar", "ler_tela", "dispositivo"];
+  var ACOES = ["ligar", "whatsapp", "mapa", "abrir_site", "pesquisar", "foto", "biblia", "devocional", "plano", "abrir_app", "alarme", "timer", "lanterna", "volume", "navegar", "tocar", "escrever", "rolar", "ler_tela", "dispositivo", "marketing", "post_marketing"];
 
   function lerResposta(texto) {
     var bruto = String(texto || "").trim();
