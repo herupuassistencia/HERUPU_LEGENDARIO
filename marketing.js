@@ -239,7 +239,11 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     try {
       const agora = Date.now();
       const vencidos = db.posts.filter((p) => p.status === "aprovado" && p.quando && Date.parse(p.quando) <= agora);
-      for (const p of vencidos) await publicar(p).catch((e) => console.log("[HERUPU] agenda:", e.message));
+      for (const p of vencidos) {
+        const rep = await conferirRepetido(p).catch(() => "");
+        if (rep) { p.status = "erro"; p.resultados = Object.assign(p.resultados || {}, { aviso: { ok: false, erro: rep, em: new Date().toISOString() } }); salvar(); continue; }
+        await publicar(p).catch((e) => console.log("[HERUPU] agenda:", e.message));
+      }
       if (db.config.autoResponder && metaPronta() && (!db.ultimaRonda || agora - db.ultimaRonda > 10 * 60e3)) {
         db.ultimaRonda = agora;
         await responderSozinho().catch((e) => console.log("[HERUPU] auto-resposta:", e.message));
@@ -270,11 +274,13 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     "Nunca invente números, preços, promoções ou promessas que não estejam no contexto.";
 
   async function gerarLegenda({ tema, rede, extra }) {
+    const recentes = (await legendasJaPublicadas().catch(() => [])).slice(0, 12).map((x) => "- " + String(x.texto).split("\n")[0].slice(0, 120)).join("\n");
     const sistema =
       "Você é o social media da empresa. " + ESTILO + " Contexto da empresa: " + db.config.contexto + " " +
       "Formato da legenda: 1ª linha é um gancho de no máximo 10 palavras; depois 3 a 6 linhas curtas de valor; " +
       "uma chamada para ação clara; no fim 3 a 5 hashtags relevantes. " +
       (rede === "facebook" ? "Para Facebook pode ser um pouco mais explicativa e com o link escrito por extenso. " : "No Instagram, o link vai como 'link na bio'. ") +
+      "NUNCA repita conteúdo: use gancho, ângulo e informação diferentes destes posts já publicados (primeiras linhas):\n" + (recentes || "(nenhum ainda)") + "\n" +
       "Responda só com JSON: {\"legenda\": \"...\", \"ideia_imagem\": \"descrição curta da arte ideal\"}";
     const j = await iaJson(sistema, `Tema do post: ${tema}\n${extra ? "Observações: " + extra : ""}`);
     return { legenda: String(j.legenda || "").trim().slice(0, 2200), ideia_imagem: String(j.ideia_imagem || "").trim() };
@@ -383,6 +389,38 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     p.atualizadoEm = new Date().toISOString();
     return p;
   }
+  // ------------------------------------------------------------ nunca repetir conteúdo
+  const normalizar = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/#\S+/g, " ").replace(/https?:\/\/\S+/g, " ").replace(/[^a-z0-9 ]/g, " ");
+  const palavras = (t) => new Set(normalizar(t).split(/\s+/).filter((w) => w.length > 2));
+  function parecido(a, b) {
+    const A = palavras(a), B = palavras(b);
+    if (A.size < 4 || B.size < 4) return 0;
+    let comum = 0; A.forEach((w) => { if (B.has(w)) comum++; });
+    return comum / Math.min(A.size, B.size);
+  }
+  let legendasIG = { em: 0, lista: [] };
+  async function legendasJaPublicadas() {
+    const daqui = db.posts.filter((p) => p.status === "publicado").map((p) => ({ texto: p.legenda, onde: "post publicado em " + new Date(p.atualizadoEm).toLocaleDateString("pt-BR") }));
+    if (env("META_IG_ID") && metaPronta() && Date.now() - legendasIG.em > 10 * 60e3) {
+      try {
+        const d = (await graph("GET", `${env("META_IG_ID")}/media`, { fields: "caption,timestamp", limit: 40 }, IG)).data || [];
+        legendasIG = { em: Date.now(), lista: d.map((m) => ({ texto: m.caption || "", onde: "Instagram em " + new Date(m.timestamp).toLocaleDateString("pt-BR") })) };
+      } catch { /* sem acesso agora: usa só o histórico local */ }
+    }
+    return daqui.concat(legendasIG.lista);
+  }
+  async function conferirRepetido(post) {
+    const ja = await legendasJaPublicadas();
+    for (const x of ja) {
+      if (parecido(post.legenda, x.texto) >= 0.7) return "Essa legenda é quase igual a um " + x.onde + ". Para não repetir conteúdo, mude o texto (ou gere outro com a IA).";
+    }
+    const imgs = new Set(post.midias.map((m) => m.arquivo));
+    const mesmaImagem = db.posts.find((p) => p !== post && p.status === "publicado" && p.midias.length && p.midias.every((m) => imgs.has(m.arquivo)) && p.midias.length === post.midias.length);
+    if (mesmaImagem) return "Essas mesmas imagens já foram publicadas. Use uma arte nova.";
+    return "";
+  }
+
   function problemasDoPost(p) {
     const lista = [];
     if (!p.legenda.trim()) lista.push("falta a legenda");
@@ -492,6 +530,10 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
       if (acao === "desaprovar" && p.status === "aprovado") { p.status = "rascunho"; salvar(); return enviarJson(res, 200, p); }
       const prob = problemasDoPost(p);
       if (prob.length) return enviarJson(res, 400, { erro: "Antes de aprovar: " + prob.join(", ") + "." });
+      if (acao === "aprovar" || acao === "publicar") {
+        const rep = p.status === "erro" ? "" : await conferirRepetido(p); // "tentar de novo" de um post com erro não é repetição
+        if (rep) return enviarJson(res, 409, { erro: rep });
+      }
       if (acao === "aprovar") {
         if (!p.quando) return enviarJson(res, 400, { erro: "Escolha a data e hora, ou use Publicar agora." });
         p.status = "aprovado"; salvar(); return enviarJson(res, 200, p);
