@@ -27,7 +27,8 @@ const arqEnv = path.join(__dirname, ".env");
 if (fs.existsSync(arqEnv)) {
   for (const linha of fs.readFileSync(arqEnv, "utf8").split(/\r?\n/)) {
     const m = linha.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
+    const valor = m ? m[2].trim().replace(/^["']|["']$/g, "").trim() : "";
+    if (m && valor && !process.env[m[1]]) process.env[m[1]] = valor; // linhas vazias não apagam um valor de baixo
   }
 }
 
