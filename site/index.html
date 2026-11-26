@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>HERUPU LEGENDÁRIO</title>
+<meta name="theme-color" content="#050507">
+<meta name="description" content="HERUPU LEGENDÁRIO: assistente pessoal de voz com Bíblia, devocional e planos de leitura.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icone.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icone-192.png">
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+<div class="tela">
+
+  <header class="topo">
+    <div class="marca">
+      <span class="marca-nome" id="nomeAssistente">HERUPU LEGENDÁRIO</span>
+      <span class="marca-sub">assistente pessoal</span>
+    </div>
+    <span class="estado" id="estado" data-estado="parado">○ Parado</span>
+  </header>
+
+  <!-- ============================================================ ASSISTENTE -->
+  <main class="vista" id="vista-assistente">
+    <section class="painel painel-principal">
+      <button class="reator" id="reator" type="button" aria-describedby="dica">
+        <canvas id="anel" width="640" height="640" aria-hidden="true"></canvas>
+        <span class="reator-rotulo" id="reatorTexto">Toque para ligar</span>
+      </button>
+      <p class="dica" id="dica">Toque na esfera para falar. Para encerrar, diga “<strong>pode encerrar</strong>” ou toque na esfera.</p>
+      <p class="aviso" id="aviso" hidden></p>
+    </section>
+
+    <div class="botoes">
+      <button class="botao principal" id="botaoFalar" type="button">FALAR AGORA</button>
+      <button class="botao" id="botaoFoto" type="button">ENVIAR FOTO</button>
+    </div>
+
+    <section class="painel painel-registro" aria-label="Registro de atividades">
+      <h2 class="titulo-secao">REGISTRO DE ATIVIDADES</h2>
+      <ol id="conversa" class="registro" aria-live="polite"></ol>
+      <form class="linha-texto" id="formTexto" autocomplete="off">
+        <label class="sr" for="texto">Mensagem</label>
+        <input id="texto" type="text" placeholder="Digite um comando..." enterkeyhint="send">
+        <button class="botao principal" type="submit">ENVIAR</button>
+      </form>
+    </section>
+  </main>
+
+  <!-- ============================================================ BÍBLIA -->
+  <main class="vista" id="vista-biblia" hidden>
+    <div class="abas" role="tablist" aria-label="Bíblia">
+      <button role="tab" id="bibAba-ler" aria-selected="true" type="button">LER</button>
+      <button role="tab" id="bibAba-devocional" aria-selected="false" type="button">DEVOCIONAL</button>
+      <button role="tab" id="bibAba-planos" aria-selected="false" type="button">PLANOS</button>
+    </div>
+
+    <section id="bibPainel-ler" class="bib-painel">
+      <div class="painel bib-controles">
+        <label class="sr" for="bibLivro">Livro</label>
+        <select id="bibLivro"></select>
+        <label class="sr" for="bibCap">Capítulo</label>
+        <select id="bibCap"></select>
+      </div>
+      <div class="painel bib-leitura">
+        <div class="bib-cabecalho">
+          <button class="botao-icone" id="bibAnterior" type="button" aria-label="Capítulo anterior">‹</button>
+          <h2 id="bibTitulo">João 1</h2>
+          <button class="botao-icone" id="bibProximo" type="button" aria-label="Próximo capítulo">›</button>
+        </div>
+        <div id="bibTexto" class="bib-texto"></div>
+      </div>
+      <div class="botoes">
+        <button class="botao" id="bibOuvir" type="button">OUVIR CAPÍTULO</button>
+        <button class="botao principal" id="bibEstudar" type="button">ESTUDAR CAPÍTULO</button>
+      </div>
+      <div id="bibEstudo" class="painel bib-estudo" hidden></div>
+    </section>
+
+    <section id="bibPainel-devocional" class="bib-painel" hidden>
+      <div id="bibDevTexto" class="painel bib-devocional"></div>
+      <div class="botoes">
+        <button class="botao principal" id="bibDevOuvir" type="button">OUVIR DEVOCIONAL</button>
+        <button class="botao" id="bibDevOutro" type="button">OUTRO DEVOCIONAL</button>
+      </div>
+    </section>
+
+    <section id="bibPainel-planos" class="bib-painel" hidden>
+      <div id="bibPlanosLista"></div>
+    </section>
+  </main>
+
+  <!-- ============================================================ AJUSTES -->
+  <main class="vista" id="vista-ajustes" hidden>
+    <form id="formAjustes" class="ajustes" onsubmit="return false">
+
+      <section class="painel">
+        <h2 class="titulo-secao">SEU ASSISTENTE</h2>
+        <label for="cfgNome">Nome do assistente</label>
+        <input id="cfgNome" type="text">
+        <label for="cfgFrase">Palavra para chamar</label>
+        <input id="cfgFrase" type="text">
+        <p class="nota">É o que você fala para ele acordar. Exemplo: Legendário.</p>
+        <label for="cfgSaudacao">O que ele responde quando é chamado</label>
+        <input id="cfgSaudacao" type="text">
+        <label for="cfgNegocio">Sobre você e sua empresa (ele usa quando o assunto for isso)</label>
+        <textarea id="cfgNegocio" rows="4"></textarea>
+      </section>
+
+      <section class="painel">
+        <h2 class="titulo-secao">LIGAÇÃO COM A INTELIGÊNCIA</h2>
+        <label for="cfgCerebro">Como ele pensa</label>
+        <select id="cfgCerebro">
+          <option value="gemini">Pela minha chave do Google (grátis)</option>
+          <option value="servidor">Pelo servidor da empresa</option>
+        </select>
+        <div id="blocoGemini">
+          <label for="cfgChave">Sua chave do Google</label>
+          <input id="cfgChave" type="password" autocomplete="off" placeholder="Cole aqui a sua chave">
+          <p class="nota">Não tem? <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Pegue a sua chave grátis aqui</a>, entre com a conta Google, toque em “Criar chave” e cole acima. Ela fica guardada só neste aparelho.</p>
+        </div>
+        <div id="blocoServidor">
+          <label for="cfgServidor">Endereço do servidor</label>
+          <input id="cfgServidor" type="url" placeholder="https://...">
+          <p class="nota">Peça esse endereço para quem instalou o sistema.</p>
+        </div>
+        <details class="avancado">
+          <summary>Opções avançadas</summary>
+          <label for="cfgModelo">Modelo da inteligência</label>
+          <input id="cfgModelo" type="text">
+          <p class="nota">Deixe como está, a não ser que alguém do suporte peça para trocar.</p>
+        </details>
+      </section>
+
+      <section class="painel">
+        <h2 class="titulo-secao">CONVERSA</h2>
+        <label for="cfgConversa">Jeito de conversar</label>
+        <select id="cfgConversa">
+          <option value="aovivo">Ao vivo, igual ao PC (recomendado)</option>
+          <option value="turnos">Por turnos (gasta menos internet)</option>
+        </select>
+        <p class="nota">Ao vivo: você fala e ele responde na hora, e pode interromper, como no computador.</p>
+        <label for="cfgVozAoVivo">Voz na conversa ao vivo</label>
+        <select id="cfgVozAoVivo"></select>
+        <details class="avancado">
+          <summary>Opções avançadas</summary>
+          <label for="cfgModeloAoVivo">Modelo da conversa ao vivo</label>
+          <input id="cfgModeloAoVivo" type="text">
+          <p class="nota">Mesmo modelo do PC. Só troque se o suporte pedir.</p>
+        </details>
+      </section>
+
+      <section class="painel">
+        <h2 class="titulo-secao">COMO ACORDAR</h2>
+        <label for="cfgModo">Ele acorda com</label>
+        <select id="cfgModo">
+          <option value="ambos">2 palmas ou a palavra para chamar</option>
+          <option value="palmas">Só 2 palmas</option>
+          <option value="voz">Só a palavra para chamar</option>
+        </select>
+        <label for="cfgSensibilidade">Sensibilidade às palmas: <output id="saidaSensibilidade"></output></label>
+        <input id="cfgSensibilidade" type="range" min="1" max="10" step="1">
+        <div class="escala"><span>Menos</span><span>Mais</span></div>
+        <p class="nota">Acorda sozinho com barulho? Diminua. Não ouve as palmas? Aumente.</p>
+      </section>
+
+      <section class="painel">
+        <h2 class="titulo-secao">VOZ E MÚSICA</h2>
+        <label for="cfgVoz">Voz para leituras e modo por turnos</label>
+        <select id="cfgVoz"></select>
+        <div class="botoes">
+          <button type="button" class="botao" id="escolherMusica">ESCOLHER MÚSICA</button>
+          <button type="button" class="botao" id="removerMusica">SOM PADRÃO</button>
+        </div>
+        <p class="nota" id="notaMusica">Toca o som padrão ao acordar.</p>
+        <button type="button" class="botao largo" id="testarAbertura">TESTAR ABERTURA</button>
+      </section>
+
+      <section class="painel" id="blocoAndroid" hidden>
+        <h2 class="titulo-secao">NO CELULAR</h2>
+        <label class="linha-check"><input type="checkbox" id="cfgEsferaFora"> Esfera azul por cima dos outros apps</label>
+        <p class="nota">Mostra que o HERUPU está ativo mesmo fora do app. Toque nela para conversar.</p>
+        <label class="linha-check"><input type="checkbox" id="cfgPalmasFundo"> Ouvir 2 palmas com o app minimizado</label>
+        <p class="nota">Bateu 2 palmas, o HERUPU abre e responde. Gasta um pouco mais de bateria.</p>
+
+        <label style="margin-top:16px">Deixar o HERUPU operar o celular</label>
+        <p class="nota">Abrir apps, tocar em botões, escrever, rolar e navegar. O Android pede sua confirmação.</p>
+        <button type="button" class="botao largo" id="btnControle">LIGAR CONTROLE DO CELULAR</button>
+        <p class="nota" id="notaControle"></p>
+      </section>
+
+      <section class="painel" id="blocoHome" hidden>
+        <h2 class="titulo-secao">CASA INTELIGENTE</h2>
+        <p class="nota">Para controlar luzes e tomadas por voz, pelo Home Assistant.</p>
+        <label for="cfgHaUrl">Endereço do Home Assistant</label>
+        <input id="cfgHaUrl" type="url" placeholder="http://192.168.0.10:8123">
+        <label for="cfgHaToken">Token de acesso</label>
+        <input id="cfgHaToken" type="password" autocomplete="off" placeholder="Cole o token do Home Assistant">
+        <p class="nota">No Home Assistant: seu perfil, lá embaixo em "Tokens de acesso de longa duração", crie um e cole aqui.</p>
+      </section>
+
+      <section class="painel">
+        <h2 class="titulo-secao">BÍBLIA</h2>
+        <label for="cfgBiblia">Versão da Bíblia</label>
+        <select id="cfgBiblia">
+          <option value="almeida">Português: João Ferreira de Almeida</option>
+          <option value="kjv">Inglês: King James (original)</option>
+        </select>
+      </section>
+
+      <button class="botao principal largo salvar" id="salvarAjustes" type="button">SALVAR</button>
+      <p class="nota salvo" id="avisoSalvo" hidden>Ajustes salvos.</p>
+    </form>
+  </main>
+
+  <button class="esfera-flutuante" id="esferaFlutuante" type="button" data-estado="parado" aria-label="HERUPU: parado. Toque para voltar ao assistente" hidden>
+    <span class="esfera-bola" aria-hidden="true"></span>
+  </button>
+
+  <nav class="navegacao" aria-label="Seções">
+    <button type="button" data-vista="assistente" aria-current="page">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="3 2.4"/></svg>
+      <span>Assistente</span>
+    </button>
+    <button type="button" data-vista="biblia">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h10.5A1.5 1.5 0 0 1 18 5v14.5H7a2 2 0 0 0-2 2V5a1.5 1.5 0 0 1 1-1.5Zm5 3v2.5H8.5v2H11V17h2v-6h2.5V9H13V6.5h-2Z" fill="currentColor"/></svg>
+      <span>Bíblia</span>
+    </button>
+    <button type="button" data-vista="ajustes">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm8.4 4.6-1.8-.5a6.8 6.8 0 0 0-.6-1.5l.9-1.6a.6.6 0 0 0-.1-.7l-1.6-1.6a.6.6 0 0 0-.7-.1l-1.6.9c-.5-.3-1-.5-1.5-.6l-.5-1.8a.6.6 0 0 0-.6-.4h-2.2a.6.6 0 0 0-.6.4l-.5 1.8c-.5.1-1 .3-1.5.6l-1.6-.9a.6.6 0 0 0-.7.1L4.6 8.8a.6.6 0 0 0-.1.7l.9 1.6c-.3.5-.5 1-.6 1.5l-1.8.5a.6.6 0 0 0-.4.6v2.2c0 .3.2.5.4.6l1.8.5c.1.5.3 1 .6 1.5l-.9 1.6a.6.6 0 0 0 .1.7l1.6 1.6c.2.2.5.2.7.1l1.6-.9c.5.3 1 .5 1.5.6l.5 1.8c.1.3.3.4.6.4h2.2c.3 0 .5-.2.6-.4l.5-1.8c.5-.1 1-.3 1.5-.6l1.6.9c.2.1.5.1.7-.1l1.6-1.6a.6.6 0 0 0 .1-.7l-.9-1.6c.3-.5.5-1 .6-1.5l1.8-.5a.6.6 0 0 0 .4-.6v-2.2a.6.6 0 0 0-.4-.6Z" fill="currentColor"/></svg>
+      <span>Ajustes</span>
+    </button>
+  </nav>
+</div>
+
+<input id="arquivoFoto" type="file" accept="image/*" capture="environment" hidden>
+<input id="arquivoMusica" type="file" accept="audio/*" hidden>
+
+<!-- Câmera ao vivo: abra, vire, mostre e pergunte o que ele está vendo -->
+<div id="camera" class="camera" hidden>
+  <video id="cameraVideo" class="camera-video" autoplay playsinline muted></video>
+  <div class="camera-topo">
+    <button id="camFechar" class="cam-icone" type="button" aria-label="Fechar câmera">✕</button>
+    <span class="cam-dica" id="camDica">Mostre algo e toque em Perguntar</span>
+    <button id="camVirar" class="cam-icone" type="button" aria-label="Virar câmera">⟳</button>
+  </div>
+  <div class="camera-baixo">
+    <input id="camPergunta" class="cam-campo" type="text" placeholder="Pergunte sobre o que está vendo (ou deixe em branco)…">
+    <div class="camera-acoes">
+      <button id="camFalar" class="botao" type="button">🎤 PERGUNTAR FALANDO</button>
+      <button id="camEnviar" class="botao primario" type="button">ANALISAR</button>
+    </div>
+    <button id="camGaleria" class="cam-link" type="button">Escolher imagem da galeria</button>
+  </div>
+</div>
+
+<script src="nucleo.js"></script>
+<script src="app.js"></script>
+<script src="aovivo.js"></script>
+<script src="biblia.js"></script>
+</body>
+</html>

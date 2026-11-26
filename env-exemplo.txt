@@ -1,0 +1,9 @@
+# Copie este arquivo para .env  (cp env-exemplo.txt .env) e preencha a chave.
+# A chave do Google fica SÓ aqui no servidor, nunca vai para o celular.
+GEMINI_API_KEY=coloque_sua_chave_do_google_aqui
+
+# Opcionais (pode deixar como está):
+PORTA=8790
+HERUPU_VOZ=pt-BR-AntonioNeural
+HERUPU_MODELO_AO_VIVO=gemini-3.8-live
+HERUPU_MODELO_TEXTO=gemini-flash-lite-latest
