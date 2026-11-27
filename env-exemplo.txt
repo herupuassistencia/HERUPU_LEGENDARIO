@@ -29,3 +29,10 @@ META_IG_TOKEN=
 # No app do TikTok, cadastre o Redirect URI: https://ia.herupusistemas.com.br/mkt/tiktok/retorno
 # TIKTOK_CLIENT_KEY=
 # TIKTOK_CLIENT_SECRET=
+
+# ---- Google Drive (modelos e cópia dos posts) ----
+# Cliente OAuth "Aplicativo da Web" do Google Cloud, com a Google Drive API ativada.
+# URI de redirecionamento: https://ia.herupusistemas.com.br/mkt/google/retorno
+# (também dá para colar no painel em Ajustes → Google Drive)
+# GOOGLE_CLIENT_ID=
+# GOOGLE_CLIENT_SECRET=

@@ -232,6 +232,27 @@
         </details>
       </section>
       <section class="painel">
+        <h2 class="titulo-secao">GOOGLE DRIVE</h2>
+        <p class="nota" id="statusGoogle">Verificando…</p>
+        <button type="button" class="botao principal largo" id="btnConectarGoogle">CONECTAR GOOGLE DRIVE</button>
+        <div id="blocoGooglePastas" hidden>
+          <p class="nota">O agente pega as artes e vídeos destas pastas (com subpastas) e mantém os modelos iguais ao Drive. Pastas com "versão antiga" no nome são ignoradas.</p>
+          <div id="listaPastasGoogle"></div>
+          <input id="linkPastaGoogle" type="url" placeholder="Link de outra pasta do Drive">
+          <button type="button" class="botao largo" id="btnPastaGoogle">+ ADICIONAR PASTA</button>
+          <button type="button" class="botao principal largo" id="btnSincronizarGoogle">SINCRONIZAR AGORA</button>
+          <label class="linha-check"><input type="checkbox" id="cfgSalvarDrive"> Salvar no Drive tudo que o agente criar (HERUPU LEGENDÁRIO / Posts gerados)</label>
+          <button type="button" class="botao largo mkt-discreto" id="btnDesconectarGoogle">DESCONECTAR GOOGLE</button>
+        </div>
+        <details class="avancado" id="blocoGoogle">
+          <summary>Chaves do Google (cliente OAuth)</summary>
+          <p class="nota">No Google Cloud: APIs e serviços → Credenciais → ID do cliente OAuth (Aplicativo da Web). URI de redirecionamento: <code id="redirGoogle"></code></p>
+          <input id="gId" type="text" placeholder="Client ID (…apps.googleusercontent.com)" autocomplete="off">
+          <input id="gSegredo" type="password" placeholder="Client Secret" autocomplete="off">
+          <button type="button" class="botao largo" id="btnChavesGoogle">SALVAR CHAVES DO GOOGLE</button>
+        </details>
+      </section>
+      <section class="painel">
         <h2 class="titulo-secao">CONEXÃO COM O TIKTOK</h2>
         <p class="nota" id="statusTiktok">Verificando…</p>
         <button type="button" class="botao principal largo" id="btnConectarTiktok">CONECTAR TIKTOK</button>

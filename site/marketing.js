@@ -89,7 +89,7 @@
       c.appendChild(document.createTextNode("   "));
       c.appendChild(el("span", { classe: j.tiktok && j.tiktok.conectado ? "ok" : "falta", texto: j.tiktok && j.tiktok.conectado ? "● TikTok conectado" : "○ TikTok não conectado" }));
       if (!j.meta || !(j.tiktok && j.tiktok.conectado)) c.appendChild(el("span", { texto: "  · conecte em Ajustes" }));
-      desenharTiktok(j.tiktok || {});
+      desenharTiktok(j.tiktok || {}); desenharGoogle(j.google);
       estado.piloto = j.piloto; estado.modelos = j.modelos || [];
       desenharPiloto(); desenharModelos();
       $("cfgContexto").value = j.config.contexto || "";
@@ -606,6 +606,7 @@
       if (m.tipo === "video") vid++; else if (m.pronta) prontas++; else img++;
       box.appendChild(el("figure", { title: m.nome + " · " + (SEGMENTOS[m.foco] || "qualquer segmento") + " · usado " + (m.usos || 0) + "x" }, [
         m.foco && m.foco !== "todos" ? el("span", { style: "position:absolute;left:3px;bottom:3px;font-size:10px;background:rgba(0,0,0,.75);color:#fff;padding:1px 5px;border-radius:6px", texto: (SEGMENTOS[m.foco] || "").split(" ")[0] }) : null,
+        m.driveId ? el("span", { style: "position:absolute;right:3px;bottom:3px;font-size:10px;background:#1a73e8;color:#fff;padding:1px 5px;border-radius:6px", texto: "Drive" }) : null,
         m.pronta ? el("span", { style: "position:absolute;left:3px;top:3px;font-size:10px;background:#22c55e;color:#0b1020;padding:1px 5px;border-radius:6px;font-weight:700", texto: "pronta" }) : null,
         m.tipo === "video" ? el("video", { src: m.url, muted: "", playsinline: "", preload: "metadata" }) : el("img", { src: m.url, alt: "", loading: "lazy" }),
         el("button", { type: "button", "aria-label": "Tirar modelo", texto: "×", onclick: function (ev) {
@@ -690,7 +691,55 @@
     api("tiktok/desconectar", {}).then(carregar).catch(function (err) { aviso(err.message); });
   });
 
-  // volta do login da Meta / TikTok
+
+  // ------------------------------------------------------------ Google Drive
+  function desenharGoogle(gg) {
+    if (!gg) return;
+    $("redirGoogle").textContent = gg.redirect || "";
+    $("statusGoogle").textContent = gg.conectado
+      ? "Conectado" + (gg.email ? " como " + gg.email : "") + ". " + (gg.sincronizando ? "Sincronizando agora…" : gg.ultimaSincronia ? "Última busca no Drive: " + dataBonita(gg.ultimaSincronia) + "." : "") + (gg.avisoSincronia ? " Aviso: " + gg.avisoSincronia : "")
+      : (gg.chaves ? "Chaves salvas. Toque em Conectar Google Drive." : "Primeiro cole as chaves do Google (abaixo).");
+    $("btnConectarGoogle").hidden = !gg.chaves || gg.conectado;
+    $("blocoGooglePastas").hidden = !gg.conectado;
+    if (!gg.chaves) $("blocoGoogle").open = true;
+    $("cfgSalvarDrive").checked = !!gg.salvarDrive;
+    var box = $("listaPastasGoogle"); box.textContent = "";
+    (gg.pastas || []).forEach(function (p) {
+      box.appendChild(el("div", { classe: "mkt-link" }, [el("div", { texto: "📁 " + p.nome }),
+        el("button", { classe: "botao", type: "button", texto: "Tirar", onclick: function (ev) {
+          if (!confirmarNoBotao(ev.target, "Tirar?")) return;
+          api("google/pasta-excluir", { id: p.id }).then(carregar).catch(function (err) { aviso(err.message); });
+        } })]));
+    });
+  }
+  $("btnChavesGoogle").addEventListener("click", function (e) {
+    var volta = ocupado(e.target, "Salvando…");
+    api("google/chaves", { clientId: $("gId").value, clientSecret: $("gSegredo").value }).then(function () {
+      $("gId").value = ""; $("gSegredo").value = ""; $("blocoGoogle").open = false; aviso("✔ Chaves do Google salvas. Agora toque em CONECTAR GOOGLE DRIVE."); return carregar();
+    }).catch(function (err) { aviso(err.message); }).then(volta);
+  });
+  $("btnConectarGoogle").addEventListener("click", function (e) {
+    var volta = ocupado(e.target, "Abrindo o Google…");
+    api("google/iniciar", {}).then(function (j) { location.href = j.url; }).catch(function (err) { aviso(err.message); volta(); });
+  });
+  $("btnSincronizarGoogle").addEventListener("click", function (e) {
+    var volta = ocupado(e.target, "Buscando no Drive (pode levar alguns minutos)…");
+    api("google/sincronizar", {}).then(function (r) {
+      aviso("✔ Drive: " + r.novos + " novo(s), " + r.removidos + " removido(s). " + r.total + " modelos vindos do Drive." + (r.falhas ? " " + r.falhas + " arquivo(s) não abriram." : "")); return carregar();
+    }).catch(function (err) { aviso(err.message); }).then(volta);
+  });
+  $("btnPastaGoogle").addEventListener("click", function (e) {
+    var volta = ocupado(e.target, "Conferindo a pasta…");
+    api("google/pasta", { link: $("linkPastaGoogle").value }).then(function () { $("linkPastaGoogle").value = ""; aviso("Pasta adicionada. Toque em Sincronizar agora."); return carregar(); })
+      .catch(function (err) { aviso(err.message); }).then(volta);
+  });
+  $("cfgSalvarDrive").addEventListener("change", function () { api("google/salvar", { ligado: $("cfgSalvarDrive").checked }).catch(function (err) { aviso(err.message); }); });
+  $("btnDesconectarGoogle").addEventListener("click", function (e) {
+    if (!confirmarNoBotao(e.target, "Toque de novo para desconectar")) return;
+    api("google/desconectar", {}).then(carregar).catch(function (err) { aviso(err.message); });
+  });
+
+  // volta do login da Meta / TikTok / Google
   (function () {
     var q = new URLSearchParams(location.search);
     if (!q.get("meta")) return;

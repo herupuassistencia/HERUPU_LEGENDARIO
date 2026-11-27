@@ -36,6 +36,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
   const ARQ_META = path.join(DIR_DADOS, "meta.json");
   fs.mkdirSync(DIR_MIDIA, { recursive: true });
   let estudio = null;
+  const drive = require("./gdrive")({ DIR_DADOS, URL_PUBLICA: () => (process.env.MKT_URL_PUBLICA || "https://ia.herupusistemas.com.br").replace(/\/+$/, "") });
   const tiktok = require("./tiktok")({ DIR_DADOS, DIR_MIDIA, URL_PUBLICA: () => (process.env.MKT_URL_PUBLICA || "https://ia.herupusistemas.com.br").replace(/\/+$/, "") });
   try { estudio = require("./estudio")({ DIR_MIDIA, falarMp3 }); } catch (e) { console.log("[HERUPU] estúdio indisponível:", e.message); }
 
@@ -686,6 +687,70 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     m.usos = (m.usos || 0) + 1; m.ultimoUso = new Date().toISOString();
     return m;
   }
+  // padroniza em MP4 vertical 1080x1920, sem som (a narração entra depois), até 60 s
+  function padronizarVideo(entrada, destino, pronto) {
+    require("child_process").execFile("ffmpeg", ["-y", "-loglevel", "error", "-i", entrada, "-t", "60", "-an",
+      "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1,format=yuv420p",
+      "-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-movflags", "+faststart", destino], { timeout: 300000 }, pronto);
+  }
+  const padronizarVideoP = (e, d) => new Promise((ok, falha) => padronizarVideo(e, d, (err) => err ? falha(new Error("vídeo não abriu")) : ok()));
+  const paraJpg = (e, d) => new Promise((ok, falha) => require("child_process").execFile("ffmpeg", ["-y", "-loglevel", "error", "-i", e,
+    "-vf", "scale='min(1920,iw)':'min(1920,ih)':force_original_aspect_ratio=decrease", "-frames:v", "1", "-q:v", "3", d], { timeout: 120000 }, (err) => err ? falha(new Error("imagem não abriu")) : ok()));
+
+  // ------------------------------------------------------------ Google Drive: modelos vêm das pastas do Drive; o que o piloto cria vai para o Drive
+  let sincronizando = false;
+  async function sincronizarDrive() {
+    if (sincronizando || !drive.conectado()) return null;
+    sincronizando = true;
+    let novos = 0, removidos = 0, falhas = 0;
+    try {
+      const lista = await drive.arquivosDasPastas();
+      const ids = new Set(lista.map((f) => f.id));
+      // apagado/movido no Drive: sai dos modelos
+      const antes = db.modelos.length;
+      db.modelos = db.modelos.filter((m) => !m.driveId || ids.has(m.driveId)); removidos = antes - db.modelos.length;
+      for (const f of lista) {
+        const c = drive.classificar(f.caminho, f.name, f.tipo);
+        const ja = db.modelos.find((m) => m.driveId === f.id);
+        if (ja && ja.md5 === (f.md5Checksum || ja.md5)) { ja.foco = c.foco; ja.pronta = c.pronta; ja.nome = f.name; continue; }
+        try {
+          const tmp = path.join(DIR_MIDIA, crypto.randomBytes(8).toString("hex") + ".drive");
+          await drive.baixar(f.id, tmp);
+          const arq = crypto.randomBytes(12).toString("hex") + (f.tipo === "video" ? ".mp4" : ".jpg");
+          try { await (f.tipo === "video" ? padronizarVideoP : paraJpg)(tmp, path.join(DIR_MIDIA, arq)); } finally { fs.rm(tmp, () => {}); }
+          if (ja) db.modelos = db.modelos.filter((m) => m !== ja);
+          const m = registrarModelo(arq, f.name, f.tipo, c.foco, c.pronta);
+          Object.assign(m, { driveId: f.id, md5: f.md5Checksum || "", caminho: f.caminho.join(" / ") });
+          novos++;
+        } catch (e) { falhas++; console.log("[HERUPU] drive:", f.name, e.message); }
+      }
+      salvar();
+      drive.anotarSincronia(falhas ? falhas + " arquivo(s) não abriram" : "");
+      if (novos || removidos) logPiloto(`Drive: ${novos} modelo(s) novo(s), ${removidos} removido(s).`);
+      return { novos, removidos, falhas, total: db.modelos.filter((m) => m.driveId).length };
+    } catch (e) {
+      drive.anotarSincronia(e.message); throw e;
+    } finally { sincronizando = false; }
+  }
+  setInterval(() => sincronizarDrive().catch((e) => console.log("[HERUPU] drive:", e.message)), 6 * 3600e3).unref();
+  setTimeout(() => sincronizarDrive().catch(() => {}), 90e3).unref();
+  // guarda no Drive as mídias de um post (Reel, vídeo do TikTok e artes)
+  async function salvarNoDrive(p) {
+    if (!drive.conectado() || db.config.salvarDrive === false) return;
+    const quando = new Date(Date.parse(p.quando || p.criadoEm) - 3 * 3600e3).toISOString().slice(0, 16).replace("T", " ").replace(":", "h");
+    const base = `${quando} - ${p.foco || "post"} - ${String(p.gancho || p.tema || "").replace(/[\/:*?"<>|]/g, "").slice(0, 50)}`;
+    const itens = [];
+    if (p.video) itens.push([p.video.arquivo, base + " - reel.mp4", "video/mp4"]);
+    if (p.videoTiktok) itens.push([p.videoTiktok.arquivo, base + " - tiktok.mp4", "video/mp4"]);
+    (p.midias || []).forEach((m, i) => itens.push([m.arquivo, base + ` - arte ${i + 1}.jpg`, "image/jpeg"]));
+    p.drive = p.drive || {};
+    for (const [arq, nome, mime] of itens) {
+      if (p.drive[arq]) continue;
+      try { p.drive[arq] = await drive.enviar(path.join(DIR_MIDIA, arq), nome, mime); } catch (e) { console.log("[HERUPU] drive (salvar):", e.message); }
+    }
+    salvar();
+  }
+
   function receberModeloVideo(req, res) {
     const auth = autorizado(req);
     if (!auth.ok) return enviarJson(res, auth.status, { erro: auth.erro });
@@ -697,10 +762,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     out.on("finish", () => {
       if (cancelado) return;
       if (tam < 1000) { fs.rm(bruto, () => {}); return enviarJson(res, 400, { erro: "Arquivo vazio." }); }
-      // padroniza em MP4 vertical 1080x1920, sem som (a narração entra depois), até 60 s
-      require("child_process").execFile("ffmpeg", ["-y", "-loglevel", "error", "-i", bruto, "-t", "60", "-an",
-        "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1,format=yuv420p",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-movflags", "+faststart", destino], { timeout: 300000 }, (e) => {
+      padronizarVideo(bruto, destino, (e) => {
         fs.rm(bruto, () => {});
         if (e) { fs.rm(destino, () => {}); return enviarJson(res, 400, { erro: "Não consegui abrir esse vídeo. Envie em MP4 ou MOV." }); }
         enviarJson(res, 200, registrarModelo(arq, nomeOriginal, "video", focoModelo, false));
@@ -812,6 +874,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     p.status = cfgP().aprovacao === "auto" && !prob.length && !rep ? "aprovado" : "rascunho";
     if (prob.length || rep) p.aviso = "Piloto: " + (rep || prob.join(", "));
     db.posts.push(p); salvar();
+    salvarNoDrive(p).catch(() => {});
     logPiloto(`${v.vaga}: ${v.formato} de ${v.foco} criado${p.status === "aprovado" ? " e agendado" : " (esperando sua aprovação)"} — "${String(p.gancho || p.tema).slice(0, 60)}"`);
     return p;
   }
@@ -873,7 +936,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
         podeConectar: Boolean(env("META_APP_ID") && env("META_APP_SECRET")),
         temAppId: Boolean(env("META_APP_ID")),
         urlPublica: URL_PUBLICA(), config: Object.assign({}, db.config, { pexels: db.config.pexels ? "configurada" : "" }),
-        tiktok: tiktok.estado(), piloto: estadoPiloto(), modelos: db.modelos,
+        tiktok: tiktok.estado(), piloto: estadoPiloto(), modelos: db.modelos, google: Object.assign(drive.estado(), { sincronizando, salvarDrive: db.config.salvarDrive !== false }),
         posts: db.posts.slice().sort((a, b) => Date.parse(b.atualizadoEm) - Date.parse(a.atualizadoEm)).slice(0, 200)
           .map((p) => Object.assign({}, p, { problemas: problemasDoPost(p) })),
       });
@@ -945,6 +1008,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
       if (!p) return enviarJson(res, 404, { erro: "Post não encontrado." });
       if (["publicando", "publicado"].includes(p.status)) return enviarJson(res, 409, { erro: "Post já publicado." });
       if (url === "/api/mkt/arte") await montarArte(p); else await montarReel(p);
+      salvarNoDrive(p).catch(() => {});
       if (p.status === "aprovado") p.status = "rascunho";
       p.atualizadoEm = new Date().toISOString(); salvar();
       return enviarJson(res, 200, Object.assign({}, p, { problemas: problemasDoPost(p) }));
@@ -959,7 +1023,19 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
       const m = salvarMidia(String(corpo.base64 || ""), String(corpo.tipo || ""));
       return enviarJson(res, 200, registrarModelo(m.arquivo, corpo.nome, "imagem", corpo.foco, corpo.pronta === true));
     }
-    if (url === "/api/mkt/modelo-excluir") { db.modelos = db.modelos.filter((m) => m.arquivo !== String(corpo.arquivo || "")); salvar(); return enviarJson(res, 200, { ok: true }); }
+    if (url === "/api/mkt/modelo-excluir") {
+      const md = db.modelos.find((m) => m.arquivo === String(corpo.arquivo || ""));
+      if (md && md.driveId) return enviarJson(res, 400, { erro: "Esse modelo vem do Google Drive: apague ou mova o arquivo lá no Drive e ele sai daqui na próxima sincronização." }); db.modelos = db.modelos.filter((m) => m.arquivo !== String(corpo.arquivo || "")); salvar(); return enviarJson(res, 200, { ok: true }); }
+    if (url === "/api/mkt/google/chaves") { drive.salvarChaves(corpo); return enviarJson(res, 200, drive.estado()); }
+    if (url === "/api/mkt/google/iniciar") return enviarJson(res, 200, { url: drive.iniciar() });
+    if (url === "/api/mkt/google/desconectar") { drive.desconectar(); return enviarJson(res, 200, drive.estado()); }
+    if (url === "/api/mkt/google/sincronizar") {
+      if (sincronizando) return enviarJson(res, 409, { erro: "Já está sincronizando com o Drive. Espere um pouco." });
+      return enviarJson(res, 200, await sincronizarDrive());
+    }
+    if (url === "/api/mkt/google/pasta") return enviarJson(res, 200, { pastas: await drive.adicionarPasta(corpo.link) });
+    if (url === "/api/mkt/google/pasta-excluir") return enviarJson(res, 200, { pastas: drive.removerPasta(String(corpo.id || "")) });
+    if (url === "/api/mkt/google/salvar") { db.config.salvarDrive = Boolean(corpo.ligado); salvar(); return enviarJson(res, 200, { ok: true }); }
     if (url === "/api/mkt/tiktok/chaves") { tiktok.salvarChaves(corpo); return enviarJson(res, 200, tiktok.estado()); }
     if (url === "/api/mkt/tiktok/iniciar") return enviarJson(res, 200, { url: tiktok.iniciar() });
     if (url === "/api/mkt/tiktok/desconectar") { tiktok.desconectar(); return enviarJson(res, 200, tiktok.estado()); }
@@ -1009,6 +1085,12 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
   function rotear(req, res, url) {
     if (req.method === "POST" && url === "/api/mkt/clipe") { receberClipe(req, res); return true; }
     if (req.method === "POST" && url === "/api/mkt/modelo-video") { receberModeloVideo(req, res); return true; }
+    if (req.method === "GET" && url === "/mkt/google/retorno") {
+      drive.receberRetorno(new URL(req.url, "http://x"))
+        .then((c) => { sincronizarDrive().catch((e) => console.log("[HERUPU] drive:", e.message)); paginaRetorno(res, true, "Google Drive conectado" + (c.email ? ": " + c.email : "") + ". Buscando as artes do Drive…"); })
+        .catch((e) => paginaRetorno(res, false, e.message));
+      return true;
+    }
     if (req.method === "GET" && url === "/mkt/tiktok/retorno") {
       tiktok.receberRetorno(new URL(req.url, "http://x"))
         .then((c) => paginaRetorno(res, true, "TikTok conectado" + (c.usuario ? ": " + c.usuario : "")))

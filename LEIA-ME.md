@@ -91,3 +91,12 @@ Aba **🤖 Piloto** do painel de marketing.
 - **TikTok** só recebe vídeo: nos posts de arte, o piloto gera também um vídeo curto narrado só para o TikTok.
   Enquanto o app do TikTok não passa na auditoria, o TikTok só aceita os vídeos como **privados**.
 - Conectar o TikTok: Ajustes → Chaves do app do TikTok → Conectar TikTok.
+
+## Google Drive
+Ajustes → Google Drive → Conectar. Depois disso o agente:
+- **Busca os modelos no Drive** (a cada 6 h ou em "Sincronizar agora"): pasta "HERUPU Marketing - Lançamento Nacional"
+  e a pasta criada por ele "HERUPU LEGENDÁRIO / Modelos / <segmento>" (com subpasta "Fundos limpos").
+  Segmento e tipo vêm do nome da pasta/arquivo (cliente, técnico/modalidades, solar, segurança, programação).
+  Imagens fora de "Fundos limpos" são artes prontas (entram inteiras no Reel). Pastas "versão antiga" são ignoradas.
+  Apagou ou moveu no Drive → sai dos modelos na próxima sincronização.
+- **Salva no Drive** tudo que cria: "HERUPU LEGENDÁRIO / Posts gerados / AAAA-MM".
