@@ -128,6 +128,7 @@ function svgApp({ tipo, tela, servico, local, cena }) {
 }
 const png = (svg) => new Resvg(svg, { font: { fontFiles: FONTES, loadSystemFonts: false, defaultFontFamily: "Poppins" } }).render().asPng();
 const rodar = (args) => new Promise((ok, falha) => execFile("ffmpeg", ["-y", "-loglevel", "error", ...args], { timeout: 180000 }, (e, _o, err) => e ? falha(new Error("ffmpeg: " + (err || e.message).slice(0, 200))) : ok()));
+const temAudio = (arq) => new Promise((ok) => execFile("ffprobe", ["-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", arq], (e, o) => ok(Boolean(String(o || "").trim()))));
 const duracao = (arq) => new Promise((ok) => execFile("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", arq], (e, o) => ok(Number(o) || 3)));
 
 module.exports = function criarEstudio({ DIR_MIDIA, falarMp3 }) {
@@ -148,6 +149,25 @@ module.exports = function criarEstudio({ DIR_MIDIA, falarMp3 }) {
     for (let i = 0; i < cenas.length; i++) {
       const c = cenas[i], img = path.join(d, `c${i}.png`), voz = path.join(d, `v${i}.mp3`), seg = path.join(d, `s${i}.mp4`);
       const ult = false; // a chamada final fica na cena do Leão HERUPU
+      // clipe enviado (ex.: gerado no Flow com o Leão HERUPU): usa o vídeo e a fala dele, com o texto por cima
+      if (c.clipe && fs.existsSync(path.join(DIR_MIDIA, c.clipe))) {
+        const clipe = path.join(DIR_MIDIA, c.clipe);
+        fs.writeFileSync(img, png(svgSobreposicao({ tela: c.tela, chamada: "" })));
+        const somDoClipe = await temAudio(clipe);
+        let durC = Math.min(await duracao(clipe), 10), audioArgs;
+        if (somDoClipe) audioArgs = ["-map", "0:a"];
+        else {
+          let temV = false;
+          if (c.fala) { try { fs.writeFileSync(voz, await falarMp3(c.fala)); durC = Math.max(durC, (await duracao(voz)) + 0.3); temV = true; } catch { /* sem voz */ } }
+          audioArgs = temV ? ["-i", voz, "-map", "2:a"] : ["-f", "lavfi", "-t", String(durC), "-i", "anullsrc=r=44100:cl=stereo", "-map", "2:a"];
+        }
+        const extra = somDoClipe ? [] : audioArgs.slice(0, audioArgs.indexOf("-map"));
+        await rodar(["-stream_loop", "-1", "-i", clipe, "-i", img, ...extra, "-filter_complex",
+          "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1[f];[f][1:v]overlay=0:0,format=yuv420p[v]",
+          "-map", "[v]", ...audioArgs.slice(audioArgs.indexOf("-map")), "-t", durC.toFixed(2), "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+          "-c:a", "aac", "-ar", "44100", "-ac", "2", "-b:a", "128k", seg]);
+        partes.push(seg); continue;
+      }
       const ehApp = /^app_/.test(c.tipo || "");
       const fundo = ehApp ? null : await buscarPexels(c.busca || "", chavePexels, d, i);
       if (ehApp) fs.writeFileSync(img, png(svgApp(c)));

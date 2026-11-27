@@ -415,11 +415,15 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
       "Cada cena é um objeto: tipo = video (filmagem real) | app_pedido (tela do cliente pedindo) | app_chamado (celular do técnico com novo chamado) | app_mapa (técnico a caminho no mapa) | app_avaliacao (serviço concluído 5 estrelas); " +
       "tela = texto curto que aparece no vídeo (máx. 8 palavras); fala = o que o narrador diz (natural, como gente falando, sem instruções); " +
       "visual = o que aparece; busca = (só tipo video) 2 a 4 palavras EM INGLÊS bem visuais para achar a filmagem num banco de vídeos (ex.: \"air conditioner dripping water\", \"electrician walking to house\"); " +
+      "flow = (só tipo video) prompt completo, em português, para gerar essa cena no Google Flow/Veo em vídeo vertical 9:16 realista: descreva o cenário, a ação, a câmera e a luz; " +
+      "quando o Leão HERUPU aparecer, descreva-o SEMPRE igual: leão humanoide realista, juba verde com detalhes de circuito, pelagem dourada, camisa polo azul com a logo HERUPU no peito, calça preta, postura confiante; " +
+      "se houver fala, escreva entre aspas a frase exata em português do Brasil, voz masculina, uma única vez, sem repetir palavras. " +
+      "Use o Leão HERUPU como personagem em pelo menos uma cena de video (é a marca registrada e o que mais deu visualização). " +
       "servico e local = (tipos app_) serviço e bairro/cidade realistas (ex.: \"Ar-condicionado pingando\", \"Santana, AP\"). Use pelo menos 2 cenas de app em cada Reel. " +
       "Para carrossel: o texto de cada slide (slide 1 = gancho, último = chamada). " +
       "Para imagem/story: o texto da arte. " +
       "\nResponda só com JSON: {\"posts\": [{\"dia\": 1, \"horario\": \"18:30\", \"formato\": \"reels|carrossel|imagem|story\", \"objetivo\": \"alcance|salvamento|conversao\", " +
-      "\"titulo\": \"nome curto\", \"gancho\": \"primeira frase/tela\", \"roteiro\": [\"texto do slide/arte\"], \"cenas\": [{\"tipo\": \"video|app_pedido|app_chamado|app_mapa|app_avaliacao\", \"tela\": \"...\", \"fala\": \"...\", \"visual\": \"...\", \"busca\": \"...\", \"servico\": \"...\", \"local\": \"...\"}], " +
+      "\"titulo\": \"nome curto\", \"gancho\": \"primeira frase/tela\", \"roteiro\": [\"texto do slide/arte\"], \"cenas\": [{\"tipo\": \"video|app_pedido|app_chamado|app_mapa|app_avaliacao\", \"tela\": \"...\", \"fala\": \"...\", \"visual\": \"...\", \"busca\": \"...\", \"servico\": \"...\", \"local\": \"...\", \"flow\": \"...\"}], " +
       "\"ideia_arte\": \"o que gravar ou desenhar, com o leão HERUPU quando fizer sentido\", \"legenda\": \"legenda pronta com CTA e 3 a 5 hashtags\"}]}";
     const j = await iaJson(sistema, "Desempenho recente:\n" + resumoParaIA(rel) + "\n\nJá publicados (não repetir):\n" + (ja || "(nenhum)"), 0.9);
     const lista = [].concat(j.posts || []).slice(0, n);
@@ -439,7 +443,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
       p.cenas = [].concat(x.cenas || []).filter((c) => c && typeof c === "object").slice(0, 8).map((c) => ({
         tipo: /^(video|app_pedido|app_chamado|app_mapa|app_avaliacao)$/.test(c.tipo) ? c.tipo : "video",
         tela: String(c.tela || "").slice(0, 90), fala: String(c.fala || "").slice(0, 300), visual: String(c.visual || "").slice(0, 200), busca: String(c.busca || "").slice(0, 60),
-        servico: String(c.servico || "").slice(0, 40), local: String(c.local || "").slice(0, 30) }));
+        servico: String(c.servico || "").slice(0, 40), local: String(c.local || "").slice(0, 30), flow: String(c.flow || "").slice(0, 1200) }));
       p.roteiro = [].concat(x.roteiro || []).map((t) => String(t).slice(0, 400)).slice(0, 12);
       if (!p.roteiro.length && p.cenas.length) p.roteiro = p.cenas.map((c) => `${c.tela} — fala: ${c.fala} (${c.visual})`);
       p.ideiaImagem = String(x.ideia_arte || "").slice(0, 500);
@@ -742,7 +746,25 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     return enviarJson(res, 404, { erro: "rota de marketing desconhecida" });
   }
 
+  // envio de clipe de vídeo para uma cena: POST /api/mkt/clipe?id=POST&cena=N (corpo = o arquivo de vídeo)
+  function receberClipe(req, res) {
+    const auth = autorizado(req);
+    if (!auth.ok) return enviarJson(res, auth.status, { erro: auth.erro });
+    const u = new URL(req.url, "http://x"), p = acharPost(u.searchParams.get("id") || ""), n = Number(u.searchParams.get("cena"));
+    if (!p || !p.cenas || !p.cenas[n]) return enviarJson(res, 404, { erro: "Post ou cena não encontrado." });
+    const arq = crypto.randomBytes(12).toString("hex") + ".mp4", destino = path.join(DIR_MIDIA, arq);
+    const out = fs.createWriteStream(destino); let tam = 0, cancelado = false;
+    req.on("data", (d) => { tam += d.length; if (tam > 300 * 1024 * 1024 && !cancelado) { cancelado = true; req.destroy(); out.destroy(); fs.rm(destino, () => {}); enviarJson(res, 413, { erro: "Vídeo maior que 300 MB." }); } });
+    req.pipe(out);
+    out.on("finish", () => {
+      if (cancelado) return;
+      if (tam < 1000) { fs.rm(destino, () => {}); return enviarJson(res, 400, { erro: "Arquivo vazio." }); }
+      p.cenas[n].clipe = arq; p.video = null; p.atualizadoEm = new Date().toISOString(); salvar();
+      enviarJson(res, 200, { ok: true, clipe: arq });
+    });
+  }
   function rotear(req, res, url) {
+    if (req.method === "POST" && url === "/api/mkt/clipe") { receberClipe(req, res); return true; }
     if (req.method === "GET" && url.startsWith("/midia/")) { servirMidia(res, url); return true; }
     if (req.method === "GET" && /^\/r\/[a-z0-9-]{1,30}$/.test(url)) { contarClique(url.slice(3), res); return true; }
     if (req.method === "GET" && url === "/mkt/meta/retorno") {

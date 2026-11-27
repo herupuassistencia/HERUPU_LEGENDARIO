@@ -133,7 +133,29 @@
       if (p.midias.length) card.appendChild(el("div", { classe: "miniaturas" }, p.midias.map(function (m) { return el("img", { src: m.url, alt: "", loading: "lazy" }); })));
       if (p.gancho) card.appendChild(el("p", { classe: "gancho", texto: "Gancho: " + p.gancho }));
       if (p.cenas && p.cenas.length) card.appendChild(el("details", {}, [el("summary", { texto: "Cenas do Reel (" + p.cenas.length + ")" }),
-        el("ol", {}, p.cenas.map(function (c) { return el("li", {}, [el("strong", { texto: c.tela }), el("div", { texto: "🎙 " + c.fala }), el("div", { classe: "nota", texto: "🎬 " + c.visual })]); }))]));
+        el("ol", {}, p.cenas.map(function (c, n) {
+          var itens = [el("strong", { texto: c.tela }), el("div", { texto: "🎙 " + c.fala }), el("div", { classe: "nota", texto: "🎬 " + c.visual })];
+          if (c.flow) itens.push(el("button", { classe: "botao", type: "button", texto: "Copiar prompt do Flow", onclick: function (ev) {
+            (navigator.clipboard ? navigator.clipboard.writeText(c.flow) : Promise.reject()).then(function () { ev.target.textContent = "Copiado ✔ (cole no Flow)"; }, function () { aviso(c.flow); });
+          } }));
+          if (c.tipo === "video" && p.status !== "publicado") {
+            var arq = el("input", { type: "file", accept: "video/*", hidden: "" });
+            var rot = el("label", { classe: "botao" }, [c.clipe ? "Clipe enviado ✔ (trocar)" : "Enviar clipe desta cena", arq]);
+            arq.addEventListener("change", function () {
+              var f = arq.files[0]; if (!f) return;
+              rot.firstChild.textContent = "Enviando… 0%";
+              var x = new XMLHttpRequest();
+              x.open("POST", "/api/mkt/clipe?id=" + encodeURIComponent(p.id) + "&cena=" + n);
+              x.setRequestHeader("x-herupu-senha", senha);
+              x.upload.onprogress = function (ev) { if (ev.lengthComputable) rot.firstChild.textContent = "Enviando… " + Math.round(ev.loaded / ev.total * 100) + "%"; };
+              x.onload = function () { if (x.status === 200) { aviso("✔ Clipe da cena " + (n + 1) + " enviado. Depois de enviar os clipes, toque em ✦ Gerar Reel."); carregar(); } else { var j = {}; try { j = JSON.parse(x.responseText); } catch (e) { /* ok */ } aviso(j.erro || (x.status === 413 ? "Vídeo grande demais para o servidor (ajuste do nginx pendente)." : "Erro " + x.status)); rot.firstChild.textContent = "Enviar clipe desta cena"; } };
+              x.onerror = function () { aviso("Falha no envio. Tente de novo."); };
+              x.send(f);
+            });
+            itens.push(rot);
+          }
+          return el("li", {}, itens);
+        }))]));
       else if (p.roteiro && p.roteiro.length) card.appendChild(el("details", {}, [el("summary", { texto: p.formato === "reels" ? "Roteiro do Reel" : "Texto dos slides / da arte" }),
         el("ol", {}, p.roteiro.map(function (t) { return el("li", { texto: t }); })),
         p.ideiaImagem ? el("p", { classe: "nota", texto: "Arte/gravação: " + p.ideiaImagem }) : null]));
