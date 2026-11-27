@@ -167,10 +167,10 @@
   }
   // confirmação no próprio botão: o 1º toque muda o texto, o 2º (em até 8 s) confirma. Sem rolar a tela.
   function confirmarNoBotao(botao, texto) {
-    if (botao.dataset.confirmar && Date.now() - Number(botao.dataset.confirmar) < 8000) { delete botao.dataset.confirmar; return true; }
-    var original = botao.textContent;
-    botao.dataset.confirmar = String(Date.now()); botao.textContent = texto; botao.classList.add("principal");
-    setTimeout(function () { if (botao.dataset.confirmar) { delete botao.dataset.confirmar; botao.textContent = original; } }, 8000);
+    if (botao.dataset.confirmar && Date.now() - Number(botao.dataset.confirmar) < 8000) { botao.textContent = botao.dataset.original; delete botao.dataset.confirmar; return true; }
+    botao.dataset.original = botao.textContent;
+    botao.dataset.confirmar = String(Date.now()); botao.textContent = texto;
+    setTimeout(function () { if (botao.dataset.confirmar) { delete botao.dataset.confirmar; botao.textContent = botao.dataset.original; } }, 8000);
     return false;
   }
   // confirmação sem diálogo do navegador: segundo toque em até 4 s confirma
