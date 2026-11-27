@@ -24,14 +24,15 @@ module.exports = function criarTikTok({ DIR_DADOS, DIR_MIDIA, URL_PUBLICA }) {
   const ler = (a) => { try { return JSON.parse(fs.readFileSync(a, "utf8")); } catch { return null; } };
   let conta = ler(ARQ_TOKEN);
   let app = ler(ARQ_APP) || {};
-  const chave = () => process.env.TIKTOK_CLIENT_KEY || process.env.TIKTOK_CLIENT_ID || app.chave || "";
-  const segredo = () => process.env.TIKTOK_CLIENT_SECRET || app.segredo || "";
+  // chaves coladas no painel valem mais que as do .env (permite trocar para as chaves do Sandbox sem mexer no servidor)
+  const chave = () => app.chave || process.env.TIKTOK_CLIENT_KEY || process.env.TIKTOK_CLIENT_ID || "";
+  const segredo = () => (app.chave ? app.segredo : process.env.TIKTOK_CLIENT_SECRET) || "";
   const retorno = () => URL_PUBLICA() + "/mkt/tiktok/retorno";
   const salvarConta = () => fs.writeFileSync(ARQ_TOKEN, JSON.stringify(conta, null, 1), { mode: 0o600 });
 
   function estado() {
     return {
-      chaves: Boolean(chave() && segredo()),
+      chaves: Boolean(chave() && segredo()), chaveInicio: chave().slice(0, 6), origemChave: app.chave ? "painel" : "servidor",
       conectado: Boolean(conta && conta.refresh_token && Date.now() < (conta.refreshAte || 0)),
       usuario: conta ? conta.usuario || "" : "",
       em: conta ? conta.conectadoEm : null,

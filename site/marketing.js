@@ -667,8 +667,9 @@
     $("redirTiktok").textContent = t.redirect || "";
     $("statusTiktok").textContent = t.conectado
       ? "Conectado" + (t.usuario ? " como " + t.usuario : "") + " desde " + dataBonita(t.em) + "." + (t.privado ? " Os vídeos saem PRIVADOS até o app do TikTok passar na auditoria." : "")
-      : (t.chaves ? "Chaves salvas. Toque em Conectar TikTok." : "Primeiro cole as chaves do app do TikTok (abaixo).");
+      : (t.chaves ? "Chaves salvas (" + (t.origemChave === "painel" ? "coladas aqui" : "do servidor") + ", começa com " + t.chaveInicio + "…). Toque em Conectar TikTok." : "Primeiro cole as chaves do app do TikTok (abaixo).");
     $("btnConectarTiktok").hidden = !t.chaves || t.conectado;
+    $("blocoTiktok").querySelector("summary").textContent = t.chaves ? "Trocar chaves do app do TikTok (ex.: chaves do Sandbox)" : "Chaves do app do TikTok";
     $("btnDesconectarTiktok").hidden = !t.conectado;
     if (!t.chaves) $("blocoTiktok").open = true;
   }
