@@ -303,6 +303,46 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     return { legenda: String(j.legenda || "").trim().slice(0, 2200), ideia_imagem: String(j.ideia_imagem || "").trim() };
   }
 
+  async function analisarMidia({ imagens, tema, duracaoVideo }) {
+    const arquivos = [].concat(imagens || []).filter((a) => /^[a-f0-9]{24}\.(jpg|png)$/.test(a) && fs.existsSync(path.join(DIR_MIDIA, a))).slice(0, 5);
+    if (!arquivos.length) throw new Error("Anexe uma imagem ou um vídeo primeiro.");
+    const recentes = (await legendasJaPublicadas().catch(() => [])).slice(0, 15).map((x) => "- " + String(x.texto).split("\n")[0].slice(0, 110)).join("\n");
+    const segmentos = Object.entries(FOCOS).filter(([k]) => k !== "misto").map(([k, v]) => `${k} = ${v}`).join("\n");
+    const sistema =
+      "Você é o social media da HERUPU, especialista em alcance NACIONAL e conteúdo que viraliza no Instagram, Facebook e TikTok. " + ESTILO +
+      " Contexto da empresa: " + db.config.contexto + "\n" + PRODUTOS + "\n" + PLAYBOOK + "\n" +
+      "Você vai OLHAR a mídia anexada (" + (duracaoVideo ? `quadros de um vídeo de ${duracaoVideo} s` : arquivos.length > 1 ? `${arquivos.length} imagens de um carrossel` : "uma imagem") + ") e montar o post completo em cima do que aparece nela. " +
+      "Descreva o que viu de verdade; não invente o que não está na mídia.\n" +
+      "Escolha o segmento que mais combina:\n" + segmentos + "\n" +
+      "ALCANCE NACIONAL: escreva para o Brasil todo. Coloque na legenda, de forma natural, 2 ou 3 palavras-chave que as pessoas digitam na busca do Instagram e do TikTok (ex.: 'eletricista', 'app para técnico', 'chamado de serviço'). " +
+      "Não limite a Macapá. Só em energia solar e segurança eletrônica o atendimento é em Macapá e no Amapá: aí cite isso só na chamada final, mas mantenha gancho e hashtags nacionais.\n" +
+      "Legenda: 1ª linha = gancho de até 10 palavras que para a rolagem; depois 3 a 5 linhas curtas de valor ligadas à imagem; chamada para ação clara (link na bio / WhatsApp (96) 98415-3280 / app). Sem hashtags dentro da legenda.\n" +
+      "Hashtags: exatamente 5 (o Instagram aceita no máximo 5): 2 amplas nacionais do nicho, 2 de nicho específico do serviço mostrado e 1 da marca (#herupu). Sem acentos, sem espaços.\n" +
+      "NUNCA repita: gancho e ângulo diferentes destes posts já publicados:\n" + (recentes || "(nenhum ainda)") + "\n" +
+      "Responda só com JSON: {\"o_que_vi\": \"1 frase\", \"foco\": \"chave do segmento\", \"tema\": \"assunto em poucas palavras\", \"gancho\": \"...\", \"legenda\": \"...\", " +
+      "\"hashtags\": [\"#...\"], \"formato\": \"imagem|carrossel|reels\", \"horario\": \"melhor horário de Brasília para postar, ex. 19:30\", \"dica\": \"1 dica curta para essa mídia render mais\"}";
+    const partes = arquivos.map((a) => ({ inline_data: { mime_type: /\.png$/.test(a) ? "image/png" : "image/jpeg", data: fs.readFileSync(path.join(DIR_MIDIA, a)).toString("base64") } }));
+    partes.push({ text: "Monte o post para esta mídia." + (tema ? " Observação do dono: " + tema : "") });
+    const r = await chamarCerebro({
+      systemInstruction: { parts: [{ text: sistema }] },
+      contents: [{ role: "user", parts: partes }],
+      generationConfig: { responseMimeType: "application/json", temperature: 0.85 },
+    });
+    if (!r.ok) throw new Error("A IA não conseguiu olhar a mídia agora (" + (r.erro || "sem detalhe") + "). Tente de novo em 1 minuto.");
+    const bruto = String(r.texto || "").replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+    let j; try { j = JSON.parse(bruto.slice(bruto.indexOf("{"), bruto.lastIndexOf("}") + 1)); } catch { throw new Error("A IA respondeu num formato inesperado. Tente de novo."); }
+    const tags = [].concat(j.hashtags || []).map((t) => "#" + String(t).replace(/^#+/, "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9_]/g, "").toLowerCase())
+      .filter((t, i, a) => t.length > 2 && a.indexOf(t) === i).slice(0, 5);
+    const legenda = String(j.legenda || "").replace(/(^|\s)#\S+/g, "").trim();
+    return {
+      o_que_vi: String(j.o_que_vi || "").slice(0, 300), foco: FOCOS[j.foco] ? j.foco : "tecnicos", tema: String(j.tema || "").slice(0, 300),
+      gancho: String(j.gancho || legenda.split("\n")[0] || "").slice(0, 300), hashtags: tags,
+      legenda: (legenda + (tags.length ? "\n\n" + tags.join(" ") : "")).slice(0, 2200),
+      formato: duracaoVideo ? "reels" : arquivos.length > 1 ? "carrossel" : "imagem",
+      horario: /^\d{1,2}:\d{2}$/.test(String(j.horario || "").trim()) ? String(j.horario).trim() : "", dica: String(j.dica || "").slice(0, 300),
+    };
+  }
+
   async function sugerirResposta(comentario, legendaDoPost) {
     const sistema =
       "Você responde comentários no Instagram da empresa. " + ESTILO + " Contexto: " + db.config.contexto + " " +
@@ -507,6 +547,50 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     fs.writeFileSync(path.join(DIR_MIDIA, arquivo), dados);
     return { id: arquivo.split(".")[0], arquivo, url: "/midia/" + arquivo };
   }
+  // vídeo do post enviado direto: mantém o SOM, encaixa em 9:16 sem cortar (faixas escuras), até 3 min
+  function padronizarVideoPost(entrada, destino, pronto) {
+    require("child_process").execFile("ffmpeg", ["-y", "-loglevel", "error", "-i", entrada, "-t", "180",
+      "-vf", "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=0x07070b,fps=30,setsar=1,format=yuv420p",
+      "-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-c:a", "aac", "-ar", "44100", "-ac", "2", "-b:a", "128k",
+      "-movflags", "+faststart", destino], { timeout: 600000 }, pronto);
+  }
+  // tira 3 fotos do vídeo (começo, meio e fim) para a IA entender o conteúdo
+  async function quadrosDoVideo(arquivoMp4) {
+    const ent = path.join(DIR_MIDIA, arquivoMp4), dur = estudio ? await estudio.duracao(ent).catch(() => 10) : 10, saida = [];
+    for (const fr of [0.12, 0.5, 0.85]) {
+      const arq = crypto.randomBytes(12).toString("hex") + ".jpg";
+      await new Promise((ok) => require("child_process").execFile("ffmpeg", ["-y", "-loglevel", "error", "-ss", String((dur * fr).toFixed(2)), "-i", ent,
+        "-frames:v", "1", "-vf", "scale=720:-2", "-q:v", "4", path.join(DIR_MIDIA, arq)], { timeout: 60000 }, () => ok()));
+      if (fs.existsSync(path.join(DIR_MIDIA, arq))) saida.push(arq);
+    }
+    return { quadros: saida, duracao: Math.round(dur) };
+  }
+  function receberVideoPost(req, res) {
+    const auth = autorizado(req);
+    if (!auth.ok) return enviarJson(res, auth.status, { erro: auth.erro });
+    const arq = crypto.randomBytes(12).toString("hex") + ".mp4", bruto = path.join(DIR_MIDIA, arq + ".envio"), destino = path.join(DIR_MIDIA, arq);
+    const out = fs.createWriteStream(bruto); let tam = 0, cancelado = false;
+    req.on("data", (d) => { tam += d.length; if (tam > 300 * 1024 * 1024 && !cancelado) { cancelado = true; req.destroy(); out.destroy(); fs.rm(bruto, () => {}); enviarJson(res, 413, { erro: "Vídeo maior que 300 MB." }); } });
+    req.pipe(out);
+    out.on("finish", () => {
+      if (cancelado) return;
+      if (tam < 1000) { fs.rm(bruto, () => {}); return enviarJson(res, 400, { erro: "Arquivo vazio." }); }
+      padronizarVideoPost(bruto, destino, (e) => {
+        fs.rm(bruto, () => {});
+        if (e) { fs.rm(destino, () => {}); return enviarJson(res, 400, { erro: "Não consegui abrir esse vídeo. Envie em MP4 ou MOV." }); }
+        quadrosDoVideo(arq).then((q) => enviarJson(res, 200, { video: { arquivo: arq, url: "/midia/" + arq }, quadros: q.quadros, duracao: q.duracao }))
+          .catch(() => enviarJson(res, 200, { video: { arquivo: arq, url: "/midia/" + arq }, quadros: [], duracao: 0 }));
+      });
+    });
+  }
+  // TikTok só aceita vídeo: transforma as imagens do post num vídeo curto narrado, fechando com o Leão HERUPU
+  async function videoTiktokDasImagens(p) {
+    if (!estudio || p.video || (p.videoTiktok && p.videoTiktok.arquivo) || !p.midias.length) return;
+    const gancho = limparLinha(p.gancho || String(p.legenda || "").split("\n")[0]).replace(/#\S+/g, "").slice(0, 160);
+    const cenas = p.midias.slice(0, 5).map((m, i) => ({ tela: "", fala: i === 0 ? gancho : "", modelo: { arquivo: m.arquivo, inteira: true } }));
+    const v = await montarReel(p, { cenas, soTiktok: true });
+    v.daImagem = true; v.de = p.midias.map((m) => m.arquivo).join(",");
+  }
   function servirMidia(res, url) {
     const nome = path.basename(url);
     if (!/^[a-f0-9]{24}\.(jpg|png|mp4)$/.test(nome)) { res.writeHead(404); return res.end(); }
@@ -527,9 +611,17 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     if (Array.isArray(entrada.midias)) p.midias = entrada.midias.filter((m) => m && /^[a-f0-9]{24}\.(jpg|png)$/.test(m.arquivo)).slice(0, 10)
       .map((m) => ({ arquivo: m.arquivo, url: "/midia/" + m.arquivo }));
     if (!p.midias) p.midias = [];
+    // vídeo enviado direto pelo Aécio (Reel / TikTok); null tira o vídeo
+    if (entrada.video === null) { p.video = null; if (p.formato === "reels") p.formato = p.midias.length > 1 ? "carrossel" : "imagem"; }
+    else if (entrada.video && /^[a-f0-9]{24}\.mp4$/.test(entrada.video.arquivo || "") && fs.existsSync(path.join(DIR_MIDIA, entrada.video.arquivo))) {
+      if (!p.video || p.video.arquivo !== entrada.video.arquivo) { p.video = { arquivo: entrada.video.arquivo, url: "/midia/" + entrada.video.arquivo, proprio: true }; p.videoTiktok = null; }
+    }
+    if (typeof entrada.foco === "string" && FOCOS[entrada.foco]) p.foco = entrada.foco;
+    if (p.videoTiktok && p.videoTiktok.daImagem && p.videoTiktok.de !== p.midias.map((m) => m.arquivo).join(",")) p.videoTiktok = null; // imagens mudaram: refaz o vídeo do TikTok
     if (entrada.quando !== undefined) p.quando = entrada.quando && !isNaN(Date.parse(entrada.quando)) ? new Date(entrada.quando).toISOString() : null;
     if (p.legenda === undefined) p.legenda = "";
     if (typeof entrada.formato === "string" && FORMATOS.includes(entrada.formato)) p.formato = entrada.formato;
+    if (p.video && p.video.proprio) p.formato = "reels";
     p.atualizadoEm = new Date().toISOString();
     return p;
   }
@@ -571,7 +663,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     if (p.redes.includes("instagram") && !p.midias.length && !p.video) lista.push("o Instagram exige imagem ou vídeo (toque em ✦ Gerar arte ou ✦ Gerar Reel)");
     if (p.redes.includes("instagram") && p.midias.some((m) => !/\.jpg$/.test(m.arquivo))) lista.push("o Instagram só aceita JPG");
     if (p.formato === "reels" && !p.video) lista.push("é um Reel: toque em ✦ Gerar Reel para o agente montar o vídeo com narração");
-    if (p.redes.includes("tiktok") && !p.video && !p.videoTiktok) lista.push("o TikTok só publica vídeo (toque em ✦ Gerar Reel)");
+    if (p.redes.includes("tiktok") && !p.video && !p.videoTiktok) lista.push("o TikTok só publica vídeo: anexe um vídeo ou uma imagem (a imagem vira vídeo sozinha ao aprovar)");
     if (p.formato === "story") lista.push("é um story: publique pelo app do Instagram (a API não agenda stories com figurinhas)");
     return lista;
   }
@@ -900,6 +992,23 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
       .map((p) => ({ id: p.id, quando: p.quando, formato: p.formato, foco: p.foco, status: p.status, gancho: p.gancho || p.tema, redes: p.redes, aviso: p.aviso || "" }));
     return { config: cfgP(), fila, log: db.piloto.log.slice(0, 12), ocupado: pilotoOcupado, vagas: vagasAbertas().length };
   }
+  // post feito à mão (com a mídia do Aécio) entra no próximo horário livre do piloto, no lugar do post que a IA criaria
+  async function encaixarNoPiloto(p) {
+    const vagas = vagasAbertas();
+    if (!vagas.length) throw new Error("Não há horário livre do piloto hoje nem amanhã. Agende numa data e hora.");
+    const querReel = Boolean(p.video);
+    const v = vagas.find((x) => (x.formato === "reels") === querReel) || vagas[0];
+    p.vaga = v.vaga; p.quando = v.quando; p.origem = "piloto"; p.foco = p.foco || v.foco;
+    if (p.redes.includes("tiktok")) await videoTiktokDasImagens(p);
+    const prob = problemasDoPost(p);
+    if (prob.length) { delete p.vaga; throw new Error("Antes de colocar no piloto: " + prob.join(", ") + "."); }
+    const rep = await conferirRepetido(p);
+    if (rep) { delete p.vaga; throw new Error(rep); }
+    p.status = "aprovado"; p.aviso = ""; p.atualizadoEm = new Date().toISOString(); salvar();
+    salvarNoDrive(p).catch(() => {});
+    logPiloto(`${v.vaga}: post seu (${p.video ? "vídeo" : p.midias.length + " imagem(ns)"}) encaixado — "${String(p.gancho || p.tema || p.legenda.split("\n")[0]).slice(0, 60)}"`);
+    return p;
+  }
   function salvarPiloto(c) {
     const atual = cfgP();
     if (typeof c.ligado === "boolean") atual.ligado = c.ligado;
@@ -964,6 +1073,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
         db.posts.push(c); salvar(); return enviarJson(res, 200, c);
       }
       if (acao === "desaprovar" && p.status === "aprovado") { p.status = "rascunho"; salvar(); return enviarJson(res, 200, p); }
+      if ((acao === "aprovar" || acao === "publicar") && p.redes.includes("tiktok")) { await videoTiktokDasImagens(p); salvar(); }
       const prob = problemasDoPost(p);
       if (prob.length) return enviarJson(res, 400, { erro: "Antes de aprovar: " + prob.join(", ") + "." });
       if (acao === "aprovar" || acao === "publicar") {
@@ -981,6 +1091,16 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
         return enviarJson(res, 200, r);
       }
       return enviarJson(res, 400, { erro: "Ação desconhecida." });
+    }
+    if (url === "/api/mkt/analisar") {
+      const imagens = [].concat(corpo.quadros || [], (corpo.midias || []).map((m) => m && m.arquivo));
+      return enviarJson(res, 200, await analisarMidia({ imagens, tema: String(corpo.tema || "").slice(0, 400), duracaoVideo: Number(corpo.duracao) || ((corpo.quadros || []).length ? 1 : 0) }));
+    }
+    if (url === "/api/mkt/piloto/encaixar") {
+      const p = acharPost(String(corpo.id || ""));
+      if (!p) return enviarJson(res, 404, { erro: "Post não encontrado." });
+      if (["publicado", "publicando"].includes(p.status)) return enviarJson(res, 409, { erro: "Esse post já foi publicado." });
+      return enviarJson(res, 200, await encaixarNoPiloto(p));
     }
     if (url === "/api/mkt/legenda") return enviarJson(res, 200, await gerarLegenda({ tema: String(corpo.tema || "").slice(0, 500), rede: corpo.rede, extra: String(corpo.extra || "").slice(0, 500) }));
     if (url === "/api/mkt/rascunho-voz") {
@@ -1085,6 +1205,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
   function rotear(req, res, url) {
     if (req.method === "POST" && url === "/api/mkt/clipe") { receberClipe(req, res); return true; }
     if (req.method === "POST" && url === "/api/mkt/modelo-video") { receberModeloVideo(req, res); return true; }
+    if (req.method === "POST" && url === "/api/mkt/video-post") { receberVideoPost(req, res); return true; }
     if (req.method === "GET" && url === "/mkt/google/retorno") {
       drive.receberRetorno(new URL(req.url, "http://x"))
         .then((c) => { sincronizarDrive().catch((e) => console.log("[HERUPU] drive:", e.message)); paginaRetorno(res, true, "Google Drive conectado" + (c.email ? ": " + c.email : "") + ". Buscando as artes do Drive…"); })

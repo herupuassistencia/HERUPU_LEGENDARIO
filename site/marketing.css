@@ -78,3 +78,10 @@
 .mkt-link code { font-size: 12px; color: var(--suave); word-break: break-all; }
 .mkt-link strong { font-size: 20px; }
 .mkt-vazio { text-align: center; color: var(--suave); padding: 24px 8px; }
+
+.mkt-anexar { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
+.mkt-midias figure.video { width: 86px; height: 152px; }
+.mkt-sugestao { border: 1px solid var(--borda); border-radius: 12px; padding: 10px 12px; margin: 8px 0; font-size: 14px; line-height: 1.45; }
+.mkt-sugestao b { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; opacity: .75; margin-top: 6px; }
+.mkt-sugestao b:first-child { margin-top: 0; }
+.mkt-anexar .botao { display: flex; align-items: center; justify-content: center; min-height: 52px; }

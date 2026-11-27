@@ -6,7 +6,7 @@
   var senha = "";
   try { senha = localStorage.getItem(CHAVE_SENHA) || ""; } catch (e) { /* sem armazenamento */ }
 
-  var estado = { posts: [], filtro: "todos", editando: null, midias: [] };
+  var estado = { posts: [], filtro: "todos", editando: null, midias: [], video: null, quadros: [], duracao: 0, foco: "" };
 
   // ------------------------------------------------------------ utilidades
   function el(tag, attrs, filhos) {
@@ -233,7 +233,8 @@
 
   // ------------------------------------------------------------ editor
   function limparEditor() {
-    estado.editando = null; estado.midias = [];
+    estado.editando = null; estado.midias = []; estado.video = null; estado.quadros = []; estado.duracao = 0; estado.foco = "";
+    $("sugestaoIA").hidden = true; $("notaVideo").hidden = true;
     $("tituloEditor").textContent = "NOVO POST";
     $("tema").value = ""; $("legenda").value = ""; $("quando").value = "";
     $("redeInstagram").checked = true; $("redeFacebook").checked = false; $("redeTiktok").checked = false;
@@ -250,6 +251,8 @@
   }
   function editar(p) {
     estado.editando = p.id; estado.midias = p.midias.slice();
+    estado.video = p.video ? { arquivo: p.video.arquivo, url: p.video.url } : null; estado.quadros = []; estado.duracao = 0; estado.foco = p.foco || "";
+    $("sugestaoIA").hidden = true; $("notaVideo").hidden = true;
     $("tituloEditor").textContent = "EDITAR POST";
     $("tema").value = p.tema || ""; $("legenda").value = p.legenda || "";
     $("quando").value = paraCampoData(p.quando);
@@ -272,7 +275,7 @@
     if ($("redeTiktok").checked) redes.push("tiktok");
     return {
       id: estado.editando || undefined, redes: redes, tema: $("tema").value.trim(), legenda: $("legenda").value,
-      midias: estado.midias, formato: $("formato").value, quando: $("quando").value ? new Date($("quando").value).toISOString() : null
+      midias: estado.midias, video: estado.video, foco: estado.foco || undefined, formato: estado.video ? "reels" : $("formato").value, quando: $("quando").value ? new Date($("quando").value).toISOString() : null
     };
   }
   function salvarEditor() {
@@ -318,6 +321,10 @@
         el("button", { type: "button", "aria-label": "Remover imagem", texto: "×", onclick: function () { estado.midias.splice(i, 1); desenharMidias(); } })
       ]));
     });
+    if (estado.video) box.appendChild(el("figure", { classe: "video" }, [
+      el("video", { src: estado.video.url, muted: "", playsinline: "", preload: "metadata", controls: "" }),
+      el("button", { type: "button", "aria-label": "Remover vídeo", texto: "×", onclick: function () { estado.video = null; estado.quadros = []; estado.duracao = 0; if ($("formato").value === "reels") $("formato").value = estado.midias.length > 1 ? "carrossel" : "imagem"; desenharMidias(); } })
+    ]));
     for (var k = 0; k < (carregando || 0); k++) box.appendChild(el("figure", { classe: "carregando", texto: "enviando…" }));
   }
   function prepararImagem(arquivo) {
@@ -360,7 +367,69 @@
           .then(function (m) { estado.midias.push(m); faltam--; desenharMidias(faltam); })
           .catch(function (err) { faltam--; desenharMidias(faltam); aviso(err.message); });
       });
-    }, Promise.resolve());
+    }, Promise.resolve()).then(function () {
+      if (estado.midias.length > 1 && !estado.video) $("formato").value = "carrossel";
+      if (estado.midias.length && !$("legenda").value.trim()) analisar($("btnAnalisar"));
+    });
+  });
+
+  // ------------------------------------------------------------ vídeo próprio (Reel / TikTok), com o som original
+  $("arquivoVideo").addEventListener("change", function (e) {
+    var f = (e.target.files || [])[0]; e.target.value = "";
+    if (!f) return;
+    var nota = $("notaVideo"); nota.hidden = false; nota.textContent = "Enviando o vídeo…";
+    desenharMidias(1);
+    var x = new XMLHttpRequest();
+    x.open("POST", "/api/mkt/video-post");
+    x.setRequestHeader("x-herupu-senha", senha);
+    x.upload.onprogress = function (ev) { if (ev.lengthComputable) nota.textContent = "Enviando o vídeo: " + Math.round(ev.loaded / ev.total * 100) + "%" + (ev.loaded === ev.total ? " · ajustando para 9:16 (pode levar 1 min)…" : ""); };
+    x.onload = function () {
+      var j = {}; try { j = JSON.parse(x.responseText); } catch (er) { /* ok */ }
+      if (x.status !== 200) { desenharMidias(); nota.textContent = ""; nota.hidden = true; aviso(j.erro || (x.status === 413 ? "Vídeo grande demais para o servidor (falta o ajuste do nginx)." : "Erro " + x.status)); return; }
+      estado.video = j.video; estado.quadros = j.quadros || []; estado.duracao = j.duracao || 0;
+      $("formato").value = "reels";
+      $("redeInstagram").checked = true; $("redeFacebook").checked = true; $("redeTiktok").checked = true;
+      nota.textContent = "Vídeo pronto" + (j.duracao ? " (" + j.duracao + " s)" : "") + ". Vai como Reel no Instagram e Facebook e como vídeo no TikTok.";
+      desenharMidias();
+      if (!$("legenda").value.trim() || confirm("Quer que a IA reescreva a legenda olhando esse vídeo?")) analisar($("btnAnalisar"));
+    };
+    x.onerror = function () { desenharMidias(); nota.hidden = true; aviso("Falha no envio do vídeo. Confira a internet e tente de novo."); };
+    x.send(f);
+  });
+
+  // ------------------------------------------------------------ IA olha a mídia e entrega o post pronto
+  var NOMES_FOCO = { tecnicos: "Captação de técnicos", clientes: "Captação de clientes", solar: "Energia solar", seguranca: "Segurança eletrônica", programacao: "Programação de sistemas", sistemas: "HERUPU Sistemas" };
+  function analisar(botao) {
+    if (!estado.midias.length && !estado.quadros.length) { aviso(estado.video ? "Esse vídeo foi salvo antes: anexe de novo para a IA olhar." : "Anexe uma imagem ou um vídeo primeiro."); return; }
+    var volta = ocupado(botao, "A IA está olhando a mídia…");
+    var box = $("sugestaoIA"); box.hidden = false; box.textContent = "Olhando a mídia e escrevendo a legenda…";
+    api("analisar", { midias: estado.video ? [] : estado.midias, quadros: estado.video ? estado.quadros : [], duracao: estado.video ? estado.duracao : 0, tema: $("tema").value.trim() })
+      .then(function (j) {
+        $("legenda").value = j.legenda; contar();
+        if (j.tema) $("tema").value = j.tema;
+        estado.foco = j.foco || estado.foco;
+        $("formato").value = estado.video ? "reels" : j.formato;
+        $("redeInstagram").checked = true; $("redeFacebook").checked = true; $("redeTiktok").checked = true;
+        box.textContent = "";
+        [["O que a IA viu", j.o_que_vi], ["Segmento", NOMES_FOCO[j.foco] || j.foco], ["Hashtags (alcance nacional)", (j.hashtags || []).join(" ")],
+         ["Melhor horário", j.horario ? j.horario + " (Brasília)" : ""], ["Dica", j.dica]].forEach(function (l) {
+          if (!l[1]) return;
+          box.appendChild(el("b", { texto: l[0] })); box.appendChild(el("span", { texto: l[1] }));
+        });
+        if (j.horario && !$("quando").value) {
+          var h = j.horario.split(":"), d = new Date(); d.setHours(Number(h[0]), Number(h[1]), 0, 0);
+          if (d.getTime() < Date.now() + 15 * 60000) d.setDate(d.getDate() + 1);
+          $("quando").value = paraCampoData(d.toISOString());
+        }
+        aviso("Legenda pronta. Confira e toque em Publicar agora, Aprovar e agendar ou Colocar no piloto.");
+      }).catch(function (err) { box.hidden = true; aviso(err.message); }).then(volta);
+  }
+  $("btnAnalisar").addEventListener("click", function (e) { analisar(e.target); });
+  $("btnPiloto").addEventListener("click", function (e) {
+    var volta = ocupado(e.target, "Encaixando no piloto…");
+    salvarEditor().then(function (p) { return api("piloto/encaixar", { id: p.id }); })
+      .then(function (p) { aviso("No piloto: publica sozinho em " + dataBonita(p.quando) + "."); limparEditor(); return carregar().then(function () { abrirAba("posts"); }); })
+      .catch(function (err) { aviso(err.message); }).then(volta);
   });
 
   // ------------------------------------------------------------ comentários

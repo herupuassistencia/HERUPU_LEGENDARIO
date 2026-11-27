@@ -154,6 +154,21 @@
     <main class="mkt-vista" id="aba-novo" hidden>
       <section class="painel">
         <h2 class="titulo-secao" id="tituloEditor">NOVO POST</h2>
+        <p class="nota">Anexe a imagem ou o vídeo: a IA olha a mídia e já escreve legenda, hashtags e chamada com alcance nacional. Depois é só publicar ou colocar no piloto.</p>
+        <div class="mkt-anexar">
+          <label class="botao mkt-upload principal">+ IMAGENS
+            <input type="file" id="arquivos" accept="image/*" multiple hidden>
+          </label>
+          <label class="botao mkt-upload principal">+ VÍDEO
+            <input type="file" id="arquivoVideo" accept="video/*" hidden>
+          </label>
+        </div>
+        <div class="mkt-midias" id="midias"></div>
+        <p class="nota" id="notaVideo" hidden></p>
+        <p class="nota">Imagens até 10 (viram carrossel), ajustadas sozinhas para o Instagram. Vídeo até 3 min, com o som original, encaixado em 9:16. No TikTok, imagem vira vídeo sozinha ao aprovar.</p>
+        <button type="button" class="botao largo" id="btnAnalisar">✦ IA: OLHAR A MÍDIA E SUGERIR O POST</button>
+        <div class="mkt-sugestao" id="sugestaoIA" hidden></div>
+
         <label for="formato">Formato</label>
         <select id="formato">
           <option value="imagem">Imagem</option>
@@ -168,7 +183,7 @@
           <label class="linha-check"><input type="checkbox" id="redeFacebook"> Facebook</label>
           <label class="linha-check"><input type="checkbox" id="redeTiktok"> TikTok</label>
         </div>
-        <p class="nota">O TikTok só publica vídeo: use ✦ Gerar Reel no post.</p>
+        <p class="nota">O TikTok só publica vídeo: anexe um vídeo, ou a imagem vira vídeo narrado (com o Leão HERUPU no fim) ao aprovar.</p>
 
         <label for="tema">Sobre o que é o post</label>
         <input id="tema" type="text" placeholder="Ex.: técnicos de refrigeração, seja o primeiro na sua cidade">
@@ -179,13 +194,6 @@
         <textarea id="legenda" rows="9" maxlength="2200" placeholder="Escreva ou gere com a IA"></textarea>
         <p class="nota"><span id="contador">0</span>/2200</p>
 
-        <label>Imagens (até 10, viram carrossel)</label>
-        <div class="mkt-midias" id="midias"></div>
-        <label class="botao largo mkt-upload">+ ADICIONAR IMAGENS
-          <input type="file" id="arquivos" accept="image/*" multiple hidden>
-        </label>
-        <p class="nota">As imagens são ajustadas sozinhas para o formato aceito pelo Instagram (JPG, entre 4:5 e 1,91:1).</p>
-
         <label for="quando">Data e hora da publicação</label>
         <input id="quando" type="datetime-local">
 
@@ -193,6 +201,7 @@
           <button type="button" class="botao" id="btnSalvar">SALVAR RASCUNHO</button>
           <button type="button" class="botao principal" id="btnAprovar">APROVAR E AGENDAR</button>
         </div>
+        <button type="button" class="botao largo principal" id="btnPiloto">⏱ COLOCAR NO PILOTO (próximo horário livre)</button>
         <button type="button" class="botao largo" id="btnPublicarJa">PUBLICAR AGORA</button>
         <button type="button" class="botao largo mkt-discreto" id="btnLimpar">LIMPAR / NOVO</button>
       </section>
