@@ -290,7 +290,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     const sistema =
       "Você é o social media da empresa, especialista em conteúdo que viraliza. " + ESTILO + " Contexto da empresa: " + db.config.contexto + "\n" + PRODUTOS + "\n" + PLAYBOOK + "\n" +
       "Formato da legenda: 1ª linha é um gancho de no máximo 10 palavras; depois 3 a 6 linhas curtas de valor; " +
-      "uma chamada para ação clara; no fim 3 a 5 hashtags relevantes. " +
+      "uma chamada para ação clara; no fim 3 a 5 hashtags relevantes. O app HERUPU é NACIONAL (todo o Brasil): não limite a Macapá, exceto em posts de energia solar. " +
       (rede === "facebook" ? "Para Facebook pode ser um pouco mais explicativa e com o link escrito por extenso. " : "No Instagram, o link vai como 'link na bio'. ") +
       "NUNCA repita conteúdo: use gancho, ângulo e informação diferentes destes posts já publicados (primeiras linhas):\n" + (recentes || "(nenhum ainda)") + "\n" +
       "Responda só com JSON: {\"legenda\": \"...\", \"ideia_imagem\": \"descrição curta da arte ideal\"}";
@@ -419,7 +419,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
       "quando o Leão HERUPU aparecer, descreva-o SEMPRE igual: leão humanoide realista, juba verde com detalhes de circuito, pelagem dourada, camisa polo azul com a logo HERUPU no peito, calça preta, postura confiante; " +
       "se houver fala, escreva entre aspas a frase exata em português do Brasil, voz masculina, uma única vez, sem repetir palavras. " +
       "Use o Leão HERUPU como personagem em pelo menos uma cena de video (é a marca registrada e o que mais deu visualização). " +
-      "servico e local = (tipos app_) serviço e bairro/cidade realistas (ex.: \"Ar-condicionado pingando\", \"Santana, AP\"). Use pelo menos 2 cenas de app em cada Reel. " +
+      "servico e local = (tipos app_) serviço e bairro/cidade realistas de QUALQUER parte do Brasil, variando a cada Reel (ex.: \"Ar-condicionado pingando\", \"Moema, São Paulo\" ou \"Boa Viagem, Recife\"). Use pelo menos 2 cenas de app em cada Reel. " +
       "Para carrossel: o texto de cada slide (slide 1 = gancho, último = chamada). " +
       "Para imagem/story: o texto da arte. " +
       "\nResponda só com JSON: {\"posts\": [{\"dia\": 1, \"horario\": \"18:30\", \"formato\": \"reels|carrossel|imagem|story\", \"objetivo\": \"alcance|salvamento|conversao\", " +

@@ -40,7 +40,11 @@ COMO CONTEÚDO VIRALIZA (regras práticas para Instagram e TikTok):
 - Séries geram hábito: "Preço justo da semana", "Erro de técnico #3", "Cidade da vez: quem é o 1º eletricista de X?".
 - Prova social e escassez reais: número de técnicos cadastrados por cidade, depoimento de técnico, primeiro chamado.
 - Constância: 1 Reel por dia > 3 posts por semana. Responder TODO comentário na primeira hora.
-- Localização: citar cidades e regiões (Macapá, Santana, Belém, interior) para busca e identificação.
+- ALCANCE NACIONAL: o app HERUPU (técnicos e clientes) atende TODO O BRASIL. Fale com o técnico de qualquer cidade.
+  Varie as cidades e regiões citadas a cada post (ex.: São Paulo, Rio, BH, Salvador, Recife, Fortaleza, Manaus, Belém, Goiânia,
+  Curitiba, Porto Alegre, interior de SP/MG/PR, Nordeste, Norte), sem concentrar em Macapá. Macapá e Amapá só nos posts de energia solar.
+- Hashtags: profissão + tema + 1 de alcance nacional (ex.: #eletricista #tecnicodearcondicionado #prestadordeservico #autonomo #brasil #herupu);
+  hashtag de cidade só quando o post citar a cidade. Nada de #viral/#fyp.
 - Nunca inventar números, preços como regra oficial, depoimentos ou promessas. Preço de serviço sempre como
   "média que muitos cobram / depende da região".
 - Nunca repetir conteúdo já publicado: sempre ângulo e informação novos.
