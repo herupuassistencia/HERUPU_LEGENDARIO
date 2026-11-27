@@ -699,7 +699,9 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
           const tela = ((txt.match(/texto(?: na tela)?:\s*([^—|]+)/i) || [])[1] || txt).split(/fala:/i)[0].slice(0, 90);
           return { tela: tela.trim(), fala: fala.trim().slice(0, 300) };
         });
-        p.video = await estudio.reel(cenas, p.foco === "clientes" ? "Peça pelo app HERUPU" : "Cadastro grátis · link na bio", db.config.pexels || env("PEXELS_KEY"));
+        const assinaturas = { clientes: "Técnico perto de você pelo app", solar: "Energia solar com quem entende", sistemas: "Sua empresa organizada de verdade" };
+        p.video = await estudio.reel(cenas, p.foco === "clientes" ? "Peça pelo app HERUPU" : p.foco === "solar" ? "Chama no WhatsApp" : "Cadastro grátis · link na bio",
+          db.config.pexels || env("PEXELS_KEY"), assinaturas[p.foco] || "Seja o primeiro da sua cidade");
         p.formato = "reels";
       }
       if (p.status === "aprovado") p.status = "rascunho";

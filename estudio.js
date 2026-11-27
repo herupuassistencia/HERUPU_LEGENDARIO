@@ -70,6 +70,21 @@ async function buscarPexels(busca, chave, pasta, i) {
   } catch (e) { console.log("[HERUPU] pexels:", e.message); }
   return null;
 }
+// cena de assinatura: o mascote oficial (Leão HERUPU) de corpo inteiro apresentando a chamada
+const MASCOTE = fs.existsSync(path.join(__dirname, "marca", "mascote.jpg"))
+  ? "data:image/jpeg;base64," + fs.readFileSync(path.join(__dirname, "marca", "mascote.jpg")).toString("base64") : LEAO;
+function svgAssinatura({ frase, chamada }) {
+  let y = 300, txt = "";
+  for (const l of quebrar(frase, 18).slice(0, 3)) { txt += `<text x="540" y="${y}" text-anchor="middle" class="t">${esc(l)}</text>`; y += 96; }
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920">
+  <style>.t{font-family:Poppins;font-size:80px;font-weight:800;fill:#fff;paint-order:stroke;stroke:#000;stroke-width:8px;stroke-linejoin:round}.c{font-family:Poppins;font-size:46px;font-weight:800;fill:#0b1020}.m{font-family:Poppins;font-size:44px;font-weight:800;fill:#22c55e;letter-spacing:6px}</style>
+  <defs><radialGradient id="g" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#145c43"/><stop offset=".7" stop-color="#0b1020"/></radialGradient></defs>
+  <rect width="100%" height="100%" fill="url(#g)"/>
+  <image href="${MASCOTE}" x="190" y="${y + 50}" width="700" height="1240" preserveAspectRatio="xMidYMax meet"/>
+  <text x="540" y="${y + 20}" text-anchor="middle" class="m">LEÃO HERUPU</text>
+  ${txt}
+  <rect x="80" y="1700" width="920" height="110" rx="24" fill="#22c55e"/><text x="540" y="1772" text-anchor="middle" class="c">${esc(chamada)}</text></svg>`;
+}
 const png = (svg) => new Resvg(svg, { font: { fontFiles: FONTES, loadSystemFonts: false, defaultFontFamily: "Poppins" } }).render().asPng();
 const rodar = (args) => new Promise((ok, falha) => execFile("ffmpeg", ["-y", "-loglevel", "error", ...args], { timeout: 180000 }, (e, _o, err) => e ? falha(new Error("ffmpeg: " + (err || e.message).slice(0, 200))) : ok()));
 const duracao = (arq) => new Promise((ok) => execFile("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", arq], (e, o) => ok(Number(o) || 3)));
@@ -87,11 +102,11 @@ module.exports = function criarEstudio({ DIR_MIDIA, falarMp3 }) {
   }
 
   // cenas: [{ tela: "texto grande", fala: "o que o Antonio narra" }]
-  async function reel(cenas, chamada, chavePexels) {
+  async function reel(cenas, chamada, chavePexels, assinatura) {
     const d = tmp(), partes = [];
     for (let i = 0; i < cenas.length; i++) {
       const c = cenas[i], img = path.join(d, `c${i}.png`), voz = path.join(d, `v${i}.mp3`), seg = path.join(d, `s${i}.mp4`);
-      const ult = i === cenas.length - 1;
+      const ult = false; // a chamada final fica na cena do Leão HERUPU
       const fundo = await buscarPexels(c.busca || "", chavePexels, d, i);
       if (fundo) fs.writeFileSync(img, png(svgSobreposicao({ tela: c.tela, chamada: ult ? chamada : "" })));
       else fs.writeFileSync(img, png(svgArte({ titulo: c.tela, destaque: c.destaque || "", texto: "", chamada: ult ? chamada : "", largura: 1080, altura: 1920, cena: `${i + 1}/${cenas.length}` })));
@@ -116,6 +131,19 @@ module.exports = function criarEstudio({ DIR_MIDIA, falarMp3 }) {
       }
       await rodar(["-loop", "1", "-i", img, ...entradaAudio, "-vf", zoom, "-t", dur.toFixed(2), "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
         "-c:a", "aac", "-ar", "44100", "-ac", "2", "-b:a", "128k", "-af", "apad", "-shortest", seg]);
+      partes.push(seg);
+    }
+    // assinatura da marca: o Leão HERUPU fecha todo Reel
+    {
+      const img = path.join(d, "assinatura.png"), voz = path.join(d, "assinatura.mp3"), seg = path.join(d, "assinatura.mp4");
+      const frase = assinatura || "Seja o primeiro da sua cidade";
+      fs.writeFileSync(img, png(svgAssinatura({ frase, chamada })));
+      let dur = 3, temVoz = false;
+      try { fs.writeFileSync(voz, await falarMp3("Eu sou o Leão HERUPU. " + frase + ". " + chamada.replace("·", ","))); dur = (await duracao(voz)) + 0.5; temVoz = true; } catch { /* sem voz */ }
+      const fr = Math.ceil(dur * 30);
+      await rodar(["-loop", "1", "-i", img, ...(temVoz ? ["-i", voz] : ["-f", "lavfi", "-t", String(dur), "-i", "anullsrc=r=44100:cl=stereo"]),
+        "-vf", `scale=2160:3840,zoompan=z='min(zoom+0.0007,1.06)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${fr}:s=1080x1920:fps=30,format=yuv420p`,
+        "-t", dur.toFixed(2), "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-c:a", "aac", "-ar", "44100", "-ac", "2", "-b:a", "128k", "-af", "apad", "-shortest", seg]);
       partes.push(seg);
     }
     const lista = path.join(d, "lista.txt"), arq = nome("mp4");
