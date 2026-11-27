@@ -150,6 +150,9 @@
       if (p.status !== "publicado" && p.status !== "publicando") {
         acoes.appendChild(el("button", { classe: "botao principal", type: "button", texto: "✦ Gerar arte", onclick: function (e) { gerarMidia(p, "arte", e.target); } }));
         acoes.appendChild(el("button", { classe: "botao principal", type: "button", texto: "✦ Gerar Reel", onclick: function (e) { gerarMidia(p, "reel", e.target); } }));
+        if (!(p.problemas && p.problemas.length)) acoes.appendChild(el("button", { classe: "botao principal", type: "button", texto: "▶ Publicar agora", onclick: function (e) {
+          if (confirmar("Publicar este post agora no " + p.redes.join(" e ") + "?")) publicarAgora(p, e.target);
+        } }));
         acoes.appendChild(el("button", { classe: "botao", type: "button", texto: "Editar", onclick: function () { editar(p); } }));
       }
       if (p.status === "aprovado") acoes.appendChild(el("button", { classe: "botao", type: "button", texto: "Tirar da agenda", onclick: function (e) { acao(p, "desaprovar", e.target); } }));

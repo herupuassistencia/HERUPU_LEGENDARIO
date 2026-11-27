@@ -408,12 +408,18 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
       "Misture objetivos: alcance (compartilhável), salvamento (útil), conversão (cadastro). Pense como o público pensa." +
       (link ? ` Na conversão, use o link rastreável ia.herupusistemas.com.br/r/${link}.` : "") +
       "\nPara reels: 3 a 6 cenas (7 a 25 s no total, gancho no primeiro segundo, final que dá vontade de rever ou mandar para alguém). " +
-      "Cada cena é um objeto: tela = texto curto que aparece no vídeo (máx. 8 palavras); fala = o que o narrador diz (frase natural, sem instruções); " +
-      "visual = o que deve aparecer no vídeo; busca = 2 a 4 palavras EM INGLÊS para achar esse vídeo num banco de imagens (ex.: \"electrician fixing panel\"). " +
+      "PENSE EM CONVERSÃO, não em encher o feed: cada Reel é uma MINI-HISTÓRIA com personagem, tensão e virada, mostrando o app HERUPU funcionando. " +
+      "Estruturas que convertem: (1) Dor real → pedido no app → técnico recebe o chamado → a caminho → resolvido + avaliação → chamada; " +
+      "(2) POV do técnico parado sem cliente → celular toca com chamado perto → ele aceita → 'seja o primeiro da sua cidade'; " +
+      "(3) Antes x depois (cliente esperando dias por indicação x técnico chegando em minutos); (4) Erro/mito do ofício que gera comentário, fechando com o app. " +
+      "Cada cena é um objeto: tipo = video (filmagem real) | app_pedido (tela do cliente pedindo) | app_chamado (celular do técnico com novo chamado) | app_mapa (técnico a caminho no mapa) | app_avaliacao (serviço concluído 5 estrelas); " +
+      "tela = texto curto que aparece no vídeo (máx. 8 palavras); fala = o que o narrador diz (natural, como gente falando, sem instruções); " +
+      "visual = o que aparece; busca = (só tipo video) 2 a 4 palavras EM INGLÊS bem visuais para achar a filmagem num banco de vídeos (ex.: \"air conditioner dripping water\", \"electrician walking to house\"); " +
+      "servico e local = (tipos app_) serviço e bairro/cidade realistas (ex.: \"Ar-condicionado pingando\", \"Santana, AP\"). Use pelo menos 2 cenas de app em cada Reel. " +
       "Para carrossel: o texto de cada slide (slide 1 = gancho, último = chamada). " +
       "Para imagem/story: o texto da arte. " +
       "\nResponda só com JSON: {\"posts\": [{\"dia\": 1, \"horario\": \"18:30\", \"formato\": \"reels|carrossel|imagem|story\", \"objetivo\": \"alcance|salvamento|conversao\", " +
-      "\"titulo\": \"nome curto\", \"gancho\": \"primeira frase/tela\", \"roteiro\": [\"texto do slide/arte\"], \"cenas\": [{\"tela\": \"...\", \"fala\": \"...\", \"visual\": \"...\", \"busca\": \"...\"}], " +
+      "\"titulo\": \"nome curto\", \"gancho\": \"primeira frase/tela\", \"roteiro\": [\"texto do slide/arte\"], \"cenas\": [{\"tipo\": \"video|app_pedido|app_chamado|app_mapa|app_avaliacao\", \"tela\": \"...\", \"fala\": \"...\", \"visual\": \"...\", \"busca\": \"...\", \"servico\": \"...\", \"local\": \"...\"}], " +
       "\"ideia_arte\": \"o que gravar ou desenhar, com o leão HERUPU quando fizer sentido\", \"legenda\": \"legenda pronta com CTA e 3 a 5 hashtags\"}]}";
     const j = await iaJson(sistema, "Desempenho recente:\n" + resumoParaIA(rel) + "\n\nJá publicados (não repetir):\n" + (ja || "(nenhum)"), 0.9);
     const lista = [].concat(j.posts || []).slice(0, n);
@@ -431,7 +437,9 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
       p.objetivo = String(x.objetivo || "");
       p.gancho = String(x.gancho || "").slice(0, 300);
       p.cenas = [].concat(x.cenas || []).filter((c) => c && typeof c === "object").slice(0, 8).map((c) => ({
-        tela: String(c.tela || "").slice(0, 90), fala: String(c.fala || "").slice(0, 300), visual: String(c.visual || "").slice(0, 200), busca: String(c.busca || "").slice(0, 60) }));
+        tipo: /^(video|app_pedido|app_chamado|app_mapa|app_avaliacao)$/.test(c.tipo) ? c.tipo : "video",
+        tela: String(c.tela || "").slice(0, 90), fala: String(c.fala || "").slice(0, 300), visual: String(c.visual || "").slice(0, 200), busca: String(c.busca || "").slice(0, 60),
+        servico: String(c.servico || "").slice(0, 40), local: String(c.local || "").slice(0, 30) }));
       p.roteiro = [].concat(x.roteiro || []).map((t) => String(t).slice(0, 400)).slice(0, 12);
       if (!p.roteiro.length && p.cenas.length) p.roteiro = p.cenas.map((c) => `${c.tela} — fala: ${c.fala} (${c.visual})`);
       p.ideiaImagem = String(x.ideia_arte || "").slice(0, 500);

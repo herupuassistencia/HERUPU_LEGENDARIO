@@ -85,6 +85,47 @@ function svgAssinatura({ frase, chamada }) {
   ${txt}
   <rect x="80" y="1700" width="920" height="110" rx="24" fill="#22c55e"/><text x="540" y="1772" text-anchor="middle" class="c">${esc(chamada)}</text></svg>`;
 }
+// telas do app HERUPU num celular (mostram o produto funcionando): pedido, chamado, mapa, avaliação
+function svgApp({ tipo, tela, servico, local, cena }) {
+  const sv = esc(servico || "Instalação elétrica"), lc = esc(local || "Centro");
+  let y = 190, topo = "";
+  for (const l of quebrar(tela, 20).slice(0, 3)) { topo += `<text x="540" y="${y}" text-anchor="middle" class="t">${esc(l)}</text>`; y += 84; }
+  const X = 250, Y = 470, W = 580, H = 1230; // tela do celular
+  let ui = "";
+  const botao = (yy, txt, cor = "#22c55e", tc = "#0b1020") => `<rect x="${X + 40}" y="${yy}" width="${W - 80}" height="96" rx="22" fill="${cor}"/><text x="540" y="${yy + 62}" text-anchor="middle" class="b" fill="${tc}">${txt}</text>`;
+  if (tipo === "app_pedido") {
+    ui = `<text x="${X + 40}" y="${Y + 190}" class="h">Do que você precisa?</text>` +
+      ["Elétrica", "Ar-cond.", "Encanador", "Informática"].map((c, i) => `<rect x="${X + 40 + (i % 2) * 255}" y="${Y + 240 + Math.floor(i / 2) * 120}" width="235" height="96" rx="20" fill="${i === 0 ? "#22c55e" : "#1e293b"}"/><text x="${X + 157 + (i % 2) * 255}" y="${Y + 300 + Math.floor(i / 2) * 120}" text-anchor="middle" class="p" fill="${i === 0 ? "#0b1020" : "#e2e8f0"}">${c}</text>`).join("") +
+      `<rect x="${X + 40}" y="${Y + 510}" width="${W - 80}" height="230" rx="22" fill="#1e293b"/><text x="${X + 70}" y="${Y + 570}" class="p" fill="#94a3b8">Descreva o problema</text><text x="${X + 70}" y="${Y + 630}" class="p">${sv}</text><text x="${X + 70}" y="${Y + 690}" class="p" fill="#94a3b8">${lc}</text>` +
+      botao(Y + 800, "Pedir técnico agora");
+  } else if (tipo === "app_chamado") {
+    ui = `<rect x="${X + 30}" y="${Y + 150}" width="${W - 60}" height="560" rx="30" fill="#0f2a1e" stroke="#22c55e" stroke-width="4"/>
+      <text x="${X + 70}" y="${Y + 220}" class="s" fill="#22c55e">NOVO CHAMADO</text><text x="${X + 70}" y="${Y + 300}" class="h">${sv}</text>
+      <text x="${X + 70}" y="${Y + 380}" class="p">${lc} · 2,3 km</text><text x="${X + 70}" y="${Y + 440}" class="p" fill="#94a3b8">Cliente avaliado: nota 4,9</text>
+      <text x="${X + 70}" y="${Y + 500}" class="p" fill="#94a3b8">Valor você combina com o cliente</text>` +
+      botao(Y + 560, "Aceitar chamado") + botao(Y + 760, "Recusar", "#1e293b", "#e2e8f0");
+  } else if (tipo === "app_mapa") {
+    let grade = ""; for (let i = 0; i < 9; i++) grade += `<line x1="${X}" y1="${Y + 120 + i * 90}" x2="${X + W}" y2="${Y + 160 + i * 90}" stroke="#1e3a5f" stroke-width="10"/><line x1="${X + i * 75}" y1="${Y + 100}" x2="${X + i * 75 + 40}" y2="${Y + 900}" stroke="#1e3a5f" stroke-width="10"/>`;
+    ui = `<rect x="${X}" y="${Y + 100}" width="${W}" height="800" fill="#0d1b2a"/>${grade}
+      <polyline points="${X + 120},${Y + 800} ${X + 170},${Y + 610} ${X + 330},${Y + 560} ${X + 380},${Y + 360} ${X + 460},${Y + 260}" fill="none" stroke="#22c55e" stroke-width="16" stroke-linecap="round" stroke-dasharray="1 0"/>
+      <circle cx="${X + 120}" cy="${Y + 800}" r="26" fill="#3b82f6" stroke="#fff" stroke-width="6"/><circle cx="${X + 460}" cy="${Y + 260}" r="30" fill="#ef4444" stroke="#fff" stroke-width="6"/>
+      <rect x="${X + 30}" y="${Y + 930}" width="${W - 60}" height="250" rx="26" fill="#1e293b"/><text x="${X + 70}" y="${Y + 1000}" class="s" fill="#22c55e">TÉCNICO A CAMINHO</text>
+      <text x="${X + 70}" y="${Y + 1070}" class="h">Chega em 8 min</text><text x="${X + 70}" y="${Y + 1130}" class="p" fill="#94a3b8">${sv} · ${lc}</text>`;
+  } else {
+    ui = `<circle cx="540" cy="${Y + 330}" r="110" fill="#22c55e"/><path d="M490 ${Y + 330} l35 38 l70 -80" fill="none" stroke="#0b1020" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="540" y="${Y + 540}" text-anchor="middle" class="h">Serviço concluído</text>${[0,1,2,3,4].map((k) => `<polygon transform="translate(${340 + k * 100},${Y + 600}) scale(1.6)" points="0,-22 6,-7 22,-7 9,3 14,19 0,9 -14,19 -9,3 -22,-7 -6,-7" fill="#facc15"/>`).join("")}
+      <rect x="${X + 40}" y="${Y + 700}" width="${W - 80}" height="200" rx="22" fill="#1e293b"/><text x="${X + 70}" y="${Y + 770}" class="p">"Chegou rápido e resolveu</text><text x="${X + 70}" y="${Y + 830}" class="p">na hora. Recomendo!"</text>` +
+      botao(Y + 960, "Avaliação do cliente", "#1e293b", "#e2e8f0");
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920">
+  <style>.t{font-family:Poppins;font-size:70px;font-weight:800;fill:#fff;paint-order:stroke;stroke:#000;stroke-width:8px}.h{font-family:Poppins;font-size:50px;font-weight:800;fill:#fff}.p{font-family:Poppins;font-size:36px;font-weight:600;fill:#e2e8f0}.s{font-family:Poppins;font-size:32px;font-weight:800;letter-spacing:4px}.b{font-family:Poppins;font-size:40px;font-weight:800}.e{font-family:'DejaVu Sans';font-size:80px;fill:#facc15}.m{font-family:Poppins;font-size:34px;font-weight:800;fill:#fff}</style>
+  <defs><radialGradient id="g" cx="50%" cy="60%" r="80%"><stop offset="0" stop-color="#145c43"/><stop offset=".75" stop-color="#0b1020"/></radialGradient><clipPath id="r"><rect x="${X + 40}" y="${Y + 50}" width="64" height="64" rx="14"/></clipPath></defs>
+  <rect width="100%" height="100%" fill="url(#g)"/>${topo}
+  <rect x="${X - 22}" y="${Y - 22}" width="${W + 44}" height="${H + 44}" rx="80" fill="#000" stroke="#334155" stroke-width="6"/>
+  <rect x="${X}" y="${Y}" width="${W}" height="${H}" rx="62" fill="#0b1020"/>
+  <image href="${LEAO}" x="${X + 40}" y="${Y + 50}" width="64" height="64" clip-path="url(#r)"/><text x="${X + 125}" y="${Y + 95}" class="m">HERUPU ${tipo === "app_pedido" ? "Cliente" : "Técnico"}</text>
+  ${ui}</svg>`;
+}
 const png = (svg) => new Resvg(svg, { font: { fontFiles: FONTES, loadSystemFonts: false, defaultFontFamily: "Poppins" } }).render().asPng();
 const rodar = (args) => new Promise((ok, falha) => execFile("ffmpeg", ["-y", "-loglevel", "error", ...args], { timeout: 180000 }, (e, _o, err) => e ? falha(new Error("ffmpeg: " + (err || e.message).slice(0, 200))) : ok()));
 const duracao = (arq) => new Promise((ok) => execFile("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", arq], (e, o) => ok(Number(o) || 3)));
@@ -107,8 +148,10 @@ module.exports = function criarEstudio({ DIR_MIDIA, falarMp3 }) {
     for (let i = 0; i < cenas.length; i++) {
       const c = cenas[i], img = path.join(d, `c${i}.png`), voz = path.join(d, `v${i}.mp3`), seg = path.join(d, `s${i}.mp4`);
       const ult = false; // a chamada final fica na cena do Leão HERUPU
-      const fundo = await buscarPexels(c.busca || "", chavePexels, d, i);
-      if (fundo) fs.writeFileSync(img, png(svgSobreposicao({ tela: c.tela, chamada: ult ? chamada : "" })));
+      const ehApp = /^app_/.test(c.tipo || "");
+      const fundo = ehApp ? null : await buscarPexels(c.busca || "", chavePexels, d, i);
+      if (ehApp) fs.writeFileSync(img, png(svgApp(c)));
+      else if (fundo) fs.writeFileSync(img, png(svgSobreposicao({ tela: c.tela, chamada: ult ? chamada : "" })));
       else fs.writeFileSync(img, png(svgArte({ titulo: c.tela, destaque: c.destaque || "", texto: "", chamada: ult ? chamada : "", largura: 1080, altura: 1920, cena: `${i + 1}/${cenas.length}` })));
       let dur = 2.5, temVoz = false;
       if (c.fala) { try { fs.writeFileSync(voz, await falarMp3(c.fala)); dur = (await duracao(voz)) + 0.35; temVoz = true; } catch { /* sem voz nessa cena */ } }
