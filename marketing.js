@@ -407,11 +407,13 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
       `\nCrie ${n} posts DIFERENTES entre si e diferentes dos já publicados. Pelo menos metade em formato reels. ` +
       "Misture objetivos: alcance (compartilhável), salvamento (útil), conversão (cadastro). Pense como o público pensa." +
       (link ? ` Na conversão, use o link rastreável ia.herupusistemas.com.br/r/${link}.` : "") +
-      "\nPara reels: roteiro cena a cena com tempo, o que aparece, texto na tela e fala (curto, 7 a 25 s, gancho no primeiro segundo, final que dá vontade de rever ou mandar para alguém). " +
+      "\nPara reels: 3 a 6 cenas (7 a 25 s no total, gancho no primeiro segundo, final que dá vontade de rever ou mandar para alguém). " +
+      "Cada cena é um objeto: tela = texto curto que aparece no vídeo (máx. 8 palavras); fala = o que o narrador diz (frase natural, sem instruções); " +
+      "visual = o que deve aparecer no vídeo; busca = 2 a 4 palavras EM INGLÊS para achar esse vídeo num banco de imagens (ex.: \"electrician fixing panel\"). " +
       "Para carrossel: o texto de cada slide (slide 1 = gancho, último = chamada). " +
       "Para imagem/story: o texto da arte. " +
       "\nResponda só com JSON: {\"posts\": [{\"dia\": 1, \"horario\": \"18:30\", \"formato\": \"reels|carrossel|imagem|story\", \"objetivo\": \"alcance|salvamento|conversao\", " +
-      "\"titulo\": \"nome curto\", \"gancho\": \"primeira frase/tela\", \"roteiro\": [\"cena ou slide 1\", \"cena ou slide 2\"], " +
+      "\"titulo\": \"nome curto\", \"gancho\": \"primeira frase/tela\", \"roteiro\": [\"texto do slide/arte\"], \"cenas\": [{\"tela\": \"...\", \"fala\": \"...\", \"visual\": \"...\", \"busca\": \"...\"}], " +
       "\"ideia_arte\": \"o que gravar ou desenhar, com o leão HERUPU quando fizer sentido\", \"legenda\": \"legenda pronta com CTA e 3 a 5 hashtags\"}]}";
     const j = await iaJson(sistema, "Desempenho recente:\n" + resumoParaIA(rel) + "\n\nJá publicados (não repetir):\n" + (ja || "(nenhum)"), 0.9);
     const lista = [].concat(j.posts || []).slice(0, n);
@@ -428,7 +430,10 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
       p.formato = FORMATOS.includes(x.formato) ? x.formato : "imagem";
       p.objetivo = String(x.objetivo || "");
       p.gancho = String(x.gancho || "").slice(0, 300);
+      p.cenas = [].concat(x.cenas || []).filter((c) => c && typeof c === "object").slice(0, 8).map((c) => ({
+        tela: String(c.tela || "").slice(0, 90), fala: String(c.fala || "").slice(0, 300), visual: String(c.visual || "").slice(0, 200), busca: String(c.busca || "").slice(0, 60) }));
       p.roteiro = [].concat(x.roteiro || []).map((t) => String(t).slice(0, 400)).slice(0, 12);
+      if (!p.roteiro.length && p.cenas.length) p.roteiro = p.cenas.map((c) => `${c.tela} — fala: ${c.fala} (${c.visual})`);
       p.ideiaImagem = String(x.ideia_arte || "").slice(0, 500);
       p.origem = "plano"; p.foco = foco;
       db.posts.push(p); criados.push(p);
@@ -610,7 +615,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
         conexao: conexaoMeta ? { pagina: conexaoMeta.pageNome, instagram: conexaoMeta.igUsuario, em: conexaoMeta.conectadoEm } : null,
         podeConectar: Boolean(env("META_APP_ID") && env("META_APP_SECRET")),
         temAppId: Boolean(env("META_APP_ID")),
-        urlPublica: URL_PUBLICA(), config: db.config,
+        urlPublica: URL_PUBLICA(), config: Object.assign({}, db.config, { pexels: db.config.pexels ? "configurada" : "" }),
         posts: db.posts.slice().sort((a, b) => Date.parse(b.atualizadoEm) - Date.parse(a.atualizadoEm)).slice(0, 200)
           .map((p) => Object.assign({}, p, { problemas: problemasDoPost(p) })),
       });
@@ -689,12 +694,12 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
         p.midias = (p.midias || []).concat([m]).slice(-10);
       } else {
         // cada linha do roteiro vira uma cena: texto grande na tela + o Antonio narrando
-        const cenas = roteiro.slice(0, 7).map((t) => {
+        const cenas = (p.cenas && p.cenas.length) ? p.cenas : roteiro.slice(0, 7).map((t) => {
           const txt = limpar(t), fala = (txt.match(/fala:\s*(.+)$/i) || [])[1] || txt.replace(/texto:\s*/i, "");
           const tela = ((txt.match(/texto(?: na tela)?:\s*([^—|]+)/i) || [])[1] || txt).split(/fala:/i)[0].slice(0, 90);
           return { tela: tela.trim(), fala: fala.trim().slice(0, 300) };
         });
-        p.video = await estudio.reel(cenas, p.foco === "clientes" ? "Peça pelo app HERUPU" : "Cadastro grátis · link na bio");
+        p.video = await estudio.reel(cenas, p.foco === "clientes" ? "Peça pelo app HERUPU" : "Cadastro grátis · link na bio", db.config.pexels || env("PEXELS_KEY"));
         p.formato = "reels";
       }
       if (p.status === "aprovado") p.status = "rascunho";
@@ -720,8 +725,9 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
       if (typeof corpo.contexto === "string") db.config.contexto = corpo.contexto.slice(0, 4000) || CONTEXTO_PADRAO;
       if (typeof corpo.kit === "string") db.config.kit = corpo.kit.slice(0, 4000) || KIT_PADRAO;
       if (typeof corpo.autoResponder === "boolean") db.config.autoResponder = corpo.autoResponder;
+      if (typeof corpo.pexels === "string" && corpo.pexels.trim()) db.config.pexels = corpo.pexels.trim().slice(0, 100);
       salvar();
-      return enviarJson(res, 200, db.config);
+      return enviarJson(res, 200, Object.assign({}, db.config, { pexels: db.config.pexels ? "configurada" : "" }));
     }
     return enviarJson(res, 404, { erro: "rota de marketing desconhecida" });
   }

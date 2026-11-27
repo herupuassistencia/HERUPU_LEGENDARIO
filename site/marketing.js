@@ -90,6 +90,7 @@
       $("cfgContexto").value = j.config.contexto || "";
       $("cfgKit").value = j.config.kit || "";
       $("cfgAuto").checked = !!j.config.autoResponder;
+      $("cfgPexels").placeholder = j.config.pexels ? "Chave configurada ✔ (cole outra para trocar)" : "Cole a chave do Pexels";
       desenharPosts();
     });
   }
@@ -131,7 +132,9 @@
       ]);
       if (p.midias.length) card.appendChild(el("div", { classe: "miniaturas" }, p.midias.map(function (m) { return el("img", { src: m.url, alt: "", loading: "lazy" }); })));
       if (p.gancho) card.appendChild(el("p", { classe: "gancho", texto: "Gancho: " + p.gancho }));
-      if (p.roteiro && p.roteiro.length) card.appendChild(el("details", {}, [el("summary", { texto: p.formato === "reels" ? "Roteiro do Reel" : "Texto dos slides / da arte" }),
+      if (p.cenas && p.cenas.length) card.appendChild(el("details", {}, [el("summary", { texto: "Cenas do Reel (" + p.cenas.length + ")" }),
+        el("ol", {}, p.cenas.map(function (c) { return el("li", {}, [el("strong", { texto: c.tela }), el("div", { texto: "🎙 " + c.fala }), el("div", { classe: "nota", texto: "🎬 " + c.visual })]); }))]));
+      else if (p.roteiro && p.roteiro.length) card.appendChild(el("details", {}, [el("summary", { texto: p.formato === "reels" ? "Roteiro do Reel" : "Texto dos slides / da arte" }),
         el("ol", {}, p.roteiro.map(function (t) { return el("li", { texto: t }); })),
         p.ideiaImagem ? el("p", { classe: "nota", texto: "Arte/gravação: " + p.ideiaImagem }) : null]));
       card.appendChild(el("div", { classe: "texto", texto: p.legenda || "(sem legenda)" }));
@@ -388,8 +391,8 @@
   // ------------------------------------------------------------ ajustes
   $("btnSalvarCfg").addEventListener("click", function (e) {
     var volta = ocupado(e.target, "Salvando…");
-    api("config", { contexto: $("cfgContexto").value, kit: $("cfgKit").value, autoResponder: $("cfgAuto").checked })
-      .then(function () { aviso("Ajustes salvos."); }).catch(function (err) { aviso(err.message); }).then(volta);
+    api("config", { contexto: $("cfgContexto").value, kit: $("cfgKit").value, autoResponder: $("cfgAuto").checked, pexels: $("cfgPexels").value })
+      .then(function () { $("cfgPexels").value = ""; aviso("Ajustes salvos."); return carregar(); }).catch(function (err) { aviso(err.message); }).then(volta);
   });
 
   // ------------------------------------------------------------ estratégia
