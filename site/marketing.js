@@ -151,7 +151,7 @@
         acoes.appendChild(el("button", { classe: "botao principal", type: "button", texto: "✦ Gerar arte", onclick: function (e) { gerarMidia(p, "arte", e.target); } }));
         acoes.appendChild(el("button", { classe: "botao principal", type: "button", texto: "✦ Gerar Reel", onclick: function (e) { gerarMidia(p, "reel", e.target); } }));
         if (!(p.problemas && p.problemas.length)) acoes.appendChild(el("button", { classe: "botao principal", type: "button", texto: "▶ Publicar agora", onclick: function (e) {
-          if (confirmar("Publicar este post agora no " + p.redes.join(" e ") + "?")) publicarAgora(p, e.target);
+          if (confirmarNoBotao(e.target, "Toque de novo para publicar")) publicarAgora(p, e.target);
         } }));
         acoes.appendChild(el("button", { classe: "botao", type: "button", texto: "Editar", onclick: function () { editar(p); } }));
       }
@@ -159,11 +159,19 @@
       if (p.status === "erro") acoes.appendChild(el("button", { classe: "botao principal", type: "button", texto: "Tentar de novo", onclick: function (e) { publicarAgora(p, e.target); } }));
       acoes.appendChild(el("button", { classe: "botao", type: "button", texto: "Duplicar", onclick: function (e) { acao(p, "duplicar", e.target); } }));
       if (p.status !== "publicando") acoes.appendChild(el("button", { classe: "botao", type: "button", texto: "Excluir", onclick: function (e) {
-        if (confirmar("Excluir este post da lista? (Se já foi publicado, continua nas redes.)")) acao(p, "excluir", e.target);
+        if (confirmarNoBotao(e.target, "Toque de novo para excluir")) acao(p, "excluir", e.target);
       } }));
       card.appendChild(acoes);
       lista.appendChild(card);
     });
+  }
+  // confirmação no próprio botão: o 1º toque muda o texto, o 2º (em até 8 s) confirma. Sem rolar a tela.
+  function confirmarNoBotao(botao, texto) {
+    if (botao.dataset.confirmar && Date.now() - Number(botao.dataset.confirmar) < 8000) { delete botao.dataset.confirmar; return true; }
+    var original = botao.textContent;
+    botao.dataset.confirmar = String(Date.now()); botao.textContent = texto; botao.classList.add("principal");
+    setTimeout(function () { if (botao.dataset.confirmar) { delete botao.dataset.confirmar; botao.textContent = original; } }, 8000);
+    return false;
   }
   // confirmação sem diálogo do navegador: segundo toque em até 4 s confirma
   var pendente = null;
@@ -251,7 +259,7 @@
       .catch(function (err) { aviso(err.message); }).then(volta);
   });
   $("btnPublicarJa").addEventListener("click", function (e) {
-    if (!confirmar("Publicar agora nas redes marcadas?")) return;
+    if (!confirmarNoBotao(e.target, "Toque de novo para publicar")) return;
     var botao = e.target;
     salvarEditor().then(function (p) { limparEditor(); return publicarAgora(p, botao); }).catch(function (err) { aviso(err.message); });
   });
@@ -483,5 +491,5 @@
   // ------------------------------------------------------------ início
   if (senha) carregar().catch(function (err) { sair(); aviso(err.message, "avisoLogin"); });
   else { $("telaLogin").hidden = false; }
-  setInterval(function () { if (senha && !$("aba-posts").hidden) carregar().catch(function () { /* ok */ }); }, 60000);
+  setInterval(function () { if (senha && !$("aba-posts").hidden && !document.querySelector("[data-confirmar]") && !document.querySelector(".mkt-card button:disabled")) carregar().catch(function () { /* ok */ }); }, 60000);
 })();
