@@ -38,6 +38,7 @@
   <div id="telaPainel" hidden>
     <nav class="mkt-abas" role="tablist">
       <button type="button" data-aba="posts" aria-selected="true">Posts</button>
+      <button type="button" data-aba="piloto" aria-selected="false">🤖 Piloto</button>
       <button type="button" data-aba="estrategia" aria-selected="false">✦ Estratégia</button>
       <button type="button" data-aba="novo" aria-selected="false">Novo</button>
       <button type="button" data-aba="comentarios" aria-selected="false">Comentários</button>
@@ -56,6 +57,44 @@
         <button type="button" data-filtro="erro" aria-pressed="false">Com erro</button>
       </div>
       <div id="listaPosts"></div>
+    </main>
+
+    <main class="mkt-vista" id="aba-piloto" hidden>
+      <section class="painel">
+        <h2 class="titulo-secao">PILOTO AUTOMÁTICO</h2>
+        <p class="nota">O LEGENDÁRIO cria sozinho os posts de hoje e de amanhã (roteiro, legenda, arte ou Reel com a voz do Antonio, usando os seus modelos de fundo) e publica nos horários abaixo. Roda no servidor, com a IA grátis: não usa o Claude.</p>
+        <p class="mkt-conexao" id="pilotoStatus"></p>
+        <label class="linha-check"><input type="checkbox" id="pilotoLigado"> Ligar o piloto automático</label>
+        <label for="pilotoAprovacao">Aprovação</label>
+        <select id="pilotoAprovacao">
+          <option value="auto">Publicar sozinho (sem eu aprovar)</option>
+          <option value="revisar">Criar e esperar eu aprovar</option>
+        </select>
+        <label>Onde publicar</label>
+        <div class="mkt-redes">
+          <label class="linha-check"><input type="checkbox" id="pilotoIG" checked> Instagram</label>
+          <label class="linha-check"><input type="checkbox" id="pilotoFB" checked> Facebook</label>
+          <label class="linha-check"><input type="checkbox" id="pilotoTT" checked> TikTok</label>
+        </div>
+        <label>Horários do dia (Brasília)</label>
+        <div id="pilotoHorarios"></div>
+        <button type="button" class="botao largo mkt-discreto" id="btnMaisHorario">+ HORÁRIO</button>
+        <button type="button" class="botao principal largo" id="btnSalvarPiloto">SALVAR PILOTO</button>
+        <button type="button" class="botao largo" id="btnPilotoAgora">✦ CRIAR O PRÓXIMO POST AGORA</button>
+        <h3 class="titulo-secao">PRÓXIMOS DO PILOTO</h3>
+        <div id="pilotoFila"></div>
+        <details class="avancado"><summary>O que o piloto fez</summary><ul id="pilotoLog"></ul></details>
+      </section>
+      <section class="painel">
+        <h2 class="titulo-secao">MEUS MODELOS (FUNDOS)</h2>
+        <p class="nota">Envie as imagens e os vídeos que vocês já criaram (Gemini, Flow, Canva, fotos reais). O piloto usa um modelo diferente a cada post como fundo, com texto, chamada e narração sempre novos. Assim nada sai repetido.</p>
+        <div class="mkt-midias" id="listaModelos"></div>
+        <div class="mkt-botoes">
+          <label class="botao mkt-upload">+ IMAGENS<input type="file" id="modeloImagens" accept="image/*" multiple hidden></label>
+          <label class="botao mkt-upload">+ VÍDEOS<input type="file" id="modeloVideos" accept="video/*" multiple hidden></label>
+        </div>
+        <p class="nota" id="notaModelos"></p>
+      </section>
     </main>
 
     <main class="mkt-vista" id="aba-estrategia" hidden>
@@ -112,8 +151,9 @@
         <div class="mkt-redes">
           <label class="linha-check"><input type="checkbox" id="redeInstagram" checked> Instagram</label>
           <label class="linha-check"><input type="checkbox" id="redeFacebook"> Facebook</label>
+          <label class="linha-check"><input type="checkbox" id="redeTiktok"> TikTok</label>
         </div>
-        <p class="nota">TikTok e Google entram na próxima etapa.</p>
+        <p class="nota">O TikTok só publica vídeo: use ✦ Gerar Reel no post.</p>
 
         <label for="tema">Sobre o que é o post</label>
         <input id="tema" type="text" placeholder="Ex.: técnicos de refrigeração, seja o primeiro na sua cidade">
@@ -174,6 +214,19 @@
             toque em <strong>Mostrar</strong> ao lado de "Chave Secreta do Aplicativo", copie e cole aqui. O servidor confere com a Meta antes de salvar.</p>
           <input id="segredoMeta" type="password" placeholder="Chave Secreta (32 caracteres)" autocomplete="off">
           <button type="button" class="botao largo" id="btnSegredo">SALVAR CHAVE SECRETA</button>
+        </details>
+      </section>
+      <section class="painel">
+        <h2 class="titulo-secao">CONEXÃO COM O TIKTOK</h2>
+        <p class="nota" id="statusTiktok">Verificando…</p>
+        <button type="button" class="botao principal largo" id="btnConectarTiktok">CONECTAR TIKTOK</button>
+        <button type="button" class="botao largo mkt-discreto" id="btnDesconectarTiktok" hidden>DESCONECTAR TIKTOK</button>
+        <details class="avancado" id="blocoTiktok">
+          <summary>Chaves do app do TikTok</summary>
+          <p class="nota">Em <a href="https://developers.tiktok.com/apps" target="_blank" rel="noopener">developers.tiktok.com → seu app</a>, copie a <strong>Client key</strong> e o <strong>Client secret</strong>. Em Login Kit, cadastre o Redirect URI: <code id="redirTiktok"></code></p>
+          <input id="ttChave" type="text" placeholder="Client key" autocomplete="off">
+          <input id="ttSegredo" type="password" placeholder="Client secret" autocomplete="off">
+          <button type="button" class="botao largo" id="btnChavesTiktok">SALVAR CHAVES DO TIKTOK</button>
         </details>
       </section>
       <section class="painel">

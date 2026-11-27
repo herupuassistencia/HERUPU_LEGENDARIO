@@ -36,6 +36,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
   const ARQ_META = path.join(DIR_DADOS, "meta.json");
   fs.mkdirSync(DIR_MIDIA, { recursive: true });
   let estudio = null;
+  const tiktok = require("./tiktok")({ DIR_DADOS, DIR_MIDIA, URL_PUBLICA: () => (process.env.MKT_URL_PUBLICA || "https://ia.herupusistemas.com.br").replace(/\/+$/, "") });
   try { estudio = require("./estudio")({ DIR_MIDIA, falarMp3 }); } catch (e) { console.log("[HERUPU] estúdio indisponível:", e.message); }
 
   // conexão feita pelo botão do painel: preenche o que o .env deixou vazio
@@ -219,17 +220,20 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     return { id: idPost, link: idPost ? "https://www.facebook.com/" + idPost : "" };
   }
 
-  const PUBLICADORES = { instagram: publicarInstagram, facebook: publicarFacebook };
+  const PUBLICADORES = { instagram: publicarInstagram, facebook: publicarFacebook, tiktok: (p) => tiktok.publicar(p) };
+  const redeMeta = (r) => r === "instagram" || r === "facebook";
 
   async function publicar(post) {
-    if (!metaPronta()) throw new Error("A conexão com a Meta ainda não foi configurada no .env (META_PAGE_TOKEN, META_PAGE_ID, META_IG_ID).");
+    if (post.redes.some(redeMeta) && !metaPronta() && !post.redes.includes("tiktok")) throw new Error("A conexão com a Meta ainda não foi configurada no .env (META_PAGE_TOKEN, META_PAGE_ID, META_IG_ID).");
     post.status = "publicando"; post.resultados = post.resultados || {}; salvar();
     let falhou = false;
     for (const rede of post.redes) {
       if (post.resultados[rede] && post.resultados[rede].ok) continue; // já foi: nunca publica repetido
       try {
+        if (redeMeta(rede) && !metaPronta()) throw new Error("Meta não conectada (Ajustes → Conectar Instagram/Facebook).");
         const r = await PUBLICADORES[rede](post);
         post.resultados[rede] = { ok: true, id: r.id, link: r.link, em: new Date().toISOString() };
+        if (r.privado) post.resultados[rede].aviso = "saiu PRIVADO (app do TikTok ainda sem auditoria)";
       } catch (e) {
         falhou = true;
         post.resultados[rede] = { ok: false, erro: e.message, em: new Date().toISOString() };
@@ -396,15 +400,12 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     sistemas: "vender o HERUPU SISTEMAS para malharias e comunicação visual (teste grátis 7 dias)",
     misto: "crescimento geral da marca, priorizando a captação de técnicos",
   };
-  async function planoDaSemana({ foco, quantidade, inicio }) {
+  function sistemaRoteiro({ foco, n, formato }) {
     const alvo = FOCOS[foco] || FOCOS.tecnicos;
-    const n = Math.min(Math.max(Number(quantidade) || 7, 3), 10);
-    let rel = null; try { rel = await relatorio(); } catch { /* sem dados */ }
-    const ja = (await legendasJaPublicadas().catch(() => [])).slice(0, 20).map((x) => "- " + String(x.texto).split("\n")[0].slice(0, 100)).join("\n");
     const link = Object.keys(db.links || {}).find((c) => db.links[c].foco === foco) || "";
-    const sistema = "Você é o estrategista e roteirista de conteúdo viral da HERUPU. " + ESTILO + "\n" + PRODUTOS + "\n" + PLAYBOOK +
-      `\nObjetivo desta semana: ${alvo}.` +
-      `\nCrie ${n} posts DIFERENTES entre si e diferentes dos já publicados. Pelo menos metade em formato reels. ` +
+    return "Você é o estrategista e roteirista de conteúdo viral da HERUPU. " + ESTILO + "\n" + PRODUTOS + "\n" + PLAYBOOK +
+      `\nObjetivo: ${alvo}.` +
+      (formato ? `\nCrie ${n} post${n > 1 ? "s" : ""} no formato ${formato}, diferente${n > 1 ? "s entre si e" : ""} dos já publicados. ` : `\nCrie ${n} posts DIFERENTES entre si e diferentes dos já publicados. Pelo menos metade em formato reels. `) +
       "Misture objetivos: alcance (compartilhável), salvamento (útil), conversão (cadastro). Pense como o público pensa." +
       (link ? ` Na conversão, use o link rastreável ia.herupusistemas.com.br/r/${link}.` : "") +
       "\nPara reels: 3 a 6 cenas (7 a 25 s no total, gancho no primeiro segundo, final que dá vontade de rever ou mandar para alguém). " +
@@ -425,6 +426,27 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
       "\nResponda só com JSON: {\"posts\": [{\"dia\": 1, \"horario\": \"18:30\", \"formato\": \"reels|carrossel|imagem|story\", \"objetivo\": \"alcance|salvamento|conversao\", " +
       "\"titulo\": \"nome curto\", \"gancho\": \"primeira frase/tela\", \"roteiro\": [\"texto do slide/arte\"], \"cenas\": [{\"tipo\": \"video|app_pedido|app_chamado|app_mapa|app_avaliacao\", \"tela\": \"...\", \"fala\": \"...\", \"visual\": \"...\", \"busca\": \"...\", \"servico\": \"...\", \"local\": \"...\", \"flow\": \"...\"}], " +
       "\"ideia_arte\": \"o que gravar ou desenhar, com o leão HERUPU quando fizer sentido\", \"legenda\": \"legenda pronta com CTA e 3 a 5 hashtags\"}]}";
+  }
+  function postDoItem(x, quando, foco) {
+    const p = limparPost({ tema: String(x.titulo || x.gancho || "").slice(0, 300), legenda: String(x.legenda || ""), redes: ["instagram"], quando });
+    p.formato = FORMATOS.includes(x.formato) ? x.formato : "imagem";
+    p.objetivo = String(x.objetivo || "");
+    p.gancho = String(x.gancho || "").slice(0, 300);
+    p.cenas = [].concat(x.cenas || []).filter((c) => c && typeof c === "object").slice(0, 8).map((c) => ({
+      tipo: /^(video|app_pedido|app_chamado|app_mapa|app_avaliacao)$/.test(c.tipo) ? c.tipo : "video",
+      tela: String(c.tela || "").slice(0, 90), fala: String(c.fala || "").slice(0, 300), visual: String(c.visual || "").slice(0, 200), busca: String(c.busca || "").slice(0, 60),
+      servico: String(c.servico || "").slice(0, 40), local: String(c.local || "").slice(0, 30), flow: String(c.flow || "").slice(0, 1200) }));
+    p.roteiro = [].concat(x.roteiro || []).map((t) => String(t).slice(0, 400)).slice(0, 12);
+    if (!p.roteiro.length && p.cenas.length) p.roteiro = p.cenas.map((c) => `${c.tela} — fala: ${c.fala} (${c.visual})`);
+    p.ideiaImagem = String(x.ideia_arte || "").slice(0, 500);
+    p.origem = "plano"; p.foco = foco;
+    return p;
+  }
+  async function planoDaSemana({ foco, quantidade, inicio }) {
+    const n = Math.min(Math.max(Number(quantidade) || 7, 3), 10);
+    let rel = null; try { rel = await relatorio(); } catch { /* sem dados */ }
+    const ja = (await legendasJaPublicadas().catch(() => [])).slice(0, 20).map((x) => "- " + String(x.texto).split("\n")[0].slice(0, 100)).join("\n");
+    const sistema = sistemaRoteiro({ foco, n });
     const j = await iaJson(sistema, "Desempenho recente:\n" + resumoParaIA(rel) + "\n\nJá publicados (não repetir):\n" + (ja || "(nenhum)"), 0.9);
     const lista = [].concat(j.posts || []).slice(0, n);
     if (!lista.length) throw new Error("A IA não devolveu o plano. Tente de novo.");
@@ -436,18 +458,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
       // horário de Brasília (UTC-3), mesmo com o servidor em outro fuso
       const b3 = new Date(base.getTime() - 3 * 3600e3);
       const quando = new Date(Date.UTC(b3.getUTCFullYear(), b3.getUTCMonth(), b3.getUTCDate() + dia, hh + 3, mm));
-      const p = limparPost({ tema: String(x.titulo || x.gancho || "").slice(0, 300), legenda: String(x.legenda || ""), redes: ["instagram"], quando: quando.toISOString() });
-      p.formato = FORMATOS.includes(x.formato) ? x.formato : "imagem";
-      p.objetivo = String(x.objetivo || "");
-      p.gancho = String(x.gancho || "").slice(0, 300);
-      p.cenas = [].concat(x.cenas || []).filter((c) => c && typeof c === "object").slice(0, 8).map((c) => ({
-        tipo: /^(video|app_pedido|app_chamado|app_mapa|app_avaliacao)$/.test(c.tipo) ? c.tipo : "video",
-        tela: String(c.tela || "").slice(0, 90), fala: String(c.fala || "").slice(0, 300), visual: String(c.visual || "").slice(0, 200), busca: String(c.busca || "").slice(0, 60),
-        servico: String(c.servico || "").slice(0, 40), local: String(c.local || "").slice(0, 30), flow: String(c.flow || "").slice(0, 1200) }));
-      p.roteiro = [].concat(x.roteiro || []).map((t) => String(t).slice(0, 400)).slice(0, 12);
-      if (!p.roteiro.length && p.cenas.length) p.roteiro = p.cenas.map((c) => `${c.tela} — fala: ${c.fala} (${c.visual})`);
-      p.ideiaImagem = String(x.ideia_arte || "").slice(0, 500);
-      p.origem = "plano"; p.foco = foco;
+      const p = postDoItem(x, quando.toISOString(), foco);
       db.posts.push(p); criados.push(p);
     });
     salvar();
@@ -552,6 +563,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     if (p.redes.includes("instagram") && !p.midias.length && !p.video) lista.push("o Instagram exige imagem ou vídeo (toque em ✦ Gerar arte ou ✦ Gerar Reel)");
     if (p.redes.includes("instagram") && p.midias.some((m) => !/\.jpg$/.test(m.arquivo))) lista.push("o Instagram só aceita JPG");
     if (p.formato === "reels" && !p.video) lista.push("é um Reel: toque em ✦ Gerar Reel para o agente montar o vídeo com narração");
+    if (p.redes.includes("tiktok") && !p.video && !p.videoTiktok) lista.push("o TikTok só publica vídeo (toque em ✦ Gerar Reel)");
     if (p.formato === "story") lista.push("é um story: publique pelo app do Instagram (a API não agenda stories com figurinhas)");
     return lista;
   }
@@ -615,6 +627,204 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     }
   }
 
+  // ------------------------------------------------------------ estúdio (arte e Reel), usado pelo painel e pelo piloto
+  const limparLinha = (t) => String(t).replace(/^\s*(\d+[-–]?\d*\s*s?:|slide\s*\d+:|cena\s*\d+:)\s*/i, "").trim();
+  const roteiroDe = (p) => (p.roteiro && p.roteiro.length ? p.roteiro : [p.gancho || p.tema || p.legenda.split("\n")[0]]).filter(Boolean);
+  const chamadaDe = (p) => p.foco === "clientes" ? "Peça seu técnico pelo app" : p.foco === "solar" ? "Chama no WhatsApp" : p.foco === "sistemas" ? "Teste grátis · link na bio" : "Cadastro grátis · link na bio";
+  async function montarArte(p, modelo) {
+    const roteiro = roteiroDe(p);
+    const titulo = limparLinha(p.gancho || roteiro[0] || p.tema);
+    const dados = { titulo, destaque: "", texto: roteiro.slice(p.gancho ? 0 : 1, 4).map(limparLinha).join(" · ").slice(0, 220), chamada: chamadaDe(p) };
+    const m = modelo ? await estudio.arteModelo(modelo, Object.assign({}, dados, { texto: dados.texto.slice(0, 120) })) : await estudio.arte(dados);
+    p.midias = (p.midias || []).concat([m]).slice(-10);
+    return m;
+  }
+  function cenasDe(p) {
+    const roteiro = roteiroDe(p);
+    return (p.cenas && p.cenas.length) ? p.cenas : roteiro.slice(0, 7).map((t) => {
+      const txt = limparLinha(t), fala = (txt.match(/fala:\s*(.+)$/i) || [])[1] || txt.replace(/texto:\s*/i, "");
+      const tela = ((txt.match(/texto(?: na tela)?:\s*([^—|]+)/i) || [])[1] || txt).split(/fala:/i)[0].slice(0, 90);
+      return { tela: tela.trim(), fala: fala.trim().slice(0, 300) };
+    });
+  }
+  const ASSINATURAS = { clientes: "Técnico perto de você pelo app", solar: "Energia solar com quem entende", sistemas: "Sua empresa organizada de verdade" };
+  async function montarReel(p, opcoes = {}) {
+    const cenas = opcoes.cenas || cenasDe(p);
+    const v = await estudio.reel(cenas, p.foco === "clientes" ? "Peça pelo app HERUPU" : p.foco === "solar" ? "Chama no WhatsApp" : "Cadastro grátis · link na bio",
+      db.config.pexels || env("PEXELS_KEY"), ASSINATURAS[p.foco] || "Seja o primeiro da sua cidade");
+    if (opcoes.soTiktok) { p.videoTiktok = v; return v; }
+    p.video = v; p.formato = "reels";
+    return v;
+  }
+
+  // ------------------------------------------------------------ banco de modelos (imagens e vídeos que o Aécio já criou)
+  db.modelos = db.modelos || [];
+  function registrarModelo(arquivo, nome, tipo) {
+    const m = { arquivo, url: "/midia/" + arquivo, tipo, nome: String(nome || "").slice(0, 80), usos: 0, criadoEm: new Date().toISOString() };
+    db.modelos.push(m); salvar();
+    return m;
+  }
+  // escolhe o modelo menos usado (sorteio entre os empatados), para variar o fundo a cada post
+  function escolherModelo(tipo) {
+    const lista = db.modelos.filter((m) => m.tipo === tipo && fs.existsSync(path.join(DIR_MIDIA, m.arquivo)));
+    if (!lista.length) return null;
+    const menor = Math.min(...lista.map((m) => m.usos || 0));
+    const cand = lista.filter((m) => (m.usos || 0) === menor);
+    const m = cand[Math.floor(Math.random() * cand.length)];
+    m.usos = (m.usos || 0) + 1; m.ultimoUso = new Date().toISOString();
+    return m;
+  }
+  function receberModeloVideo(req, res) {
+    const auth = autorizado(req);
+    if (!auth.ok) return enviarJson(res, auth.status, { erro: auth.erro });
+    const nomeOriginal = new URL(req.url, "http://x").searchParams.get("nome") || "vídeo";
+    const arq = crypto.randomBytes(12).toString("hex") + ".mp4", bruto = path.join(DIR_MIDIA, arq + ".envio"), destino = path.join(DIR_MIDIA, arq);
+    const out = fs.createWriteStream(bruto); let tam = 0, cancelado = false;
+    req.on("data", (d) => { tam += d.length; if (tam > 300 * 1024 * 1024 && !cancelado) { cancelado = true; req.destroy(); out.destroy(); fs.rm(bruto, () => {}); enviarJson(res, 413, { erro: "Vídeo maior que 300 MB." }); } });
+    req.pipe(out);
+    out.on("finish", () => {
+      if (cancelado) return;
+      if (tam < 1000) { fs.rm(bruto, () => {}); return enviarJson(res, 400, { erro: "Arquivo vazio." }); }
+      // padroniza em MP4 vertical 1080x1920, sem som (a narração entra depois), até 60 s
+      require("child_process").execFile("ffmpeg", ["-y", "-loglevel", "error", "-i", bruto, "-t", "60", "-an",
+        "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1,format=yuv420p",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-movflags", "+faststart", destino], { timeout: 300000 }, (e) => {
+        fs.rm(bruto, () => {});
+        if (e) { fs.rm(destino, () => {}); return enviarJson(res, 400, { erro: "Não consegui abrir esse vídeo. Envie em MP4 ou MOV." }); }
+        enviarJson(res, 200, registrarModelo(arq, nomeOriginal, "video"));
+      });
+    });
+  }
+
+  // ------------------------------------------------------------ PILOTO AUTOMÁTICO: cria e publica sozinho N posts por dia
+  const PILOTO_PADRAO = {
+    ligado: false, aprovacao: "auto", redes: ["instagram", "facebook", "tiktok"],
+    horarios: [
+      { hora: "09:00", formato: "reels", foco: "tecnicos" },
+      { hora: "13:00", formato: "imagem", foco: "clientes" },
+      { hora: "19:30", formato: "reels", foco: "tecnicos" },
+    ],
+  };
+  db.config.piloto = Object.assign({}, PILOTO_PADRAO, db.config.piloto || {});
+  db.piloto = db.piloto || { tentativas: {}, log: [] };
+  const cfgP = () => db.config.piloto;
+  const FORMATOS_PILOTO = ["reels", "imagem", "carrossel"];
+  function logPiloto(texto) {
+    db.piloto.log.unshift({ em: new Date().toISOString(), texto: String(texto).slice(0, 300) });
+    db.piloto.log = db.piloto.log.slice(0, 40); salvar();
+    console.log("[HERUPU] piloto:", texto);
+  }
+  // horário de Brasília (UTC-3) -> ISO
+  function isoBrasilia(dataLocal, hora) {
+    const [a, m, d] = dataLocal.split("-").map(Number), [hh, mm] = hora.split(":").map(Number);
+    return new Date(Date.UTC(a, m - 1, d, hh + 3, mm)).toISOString();
+  }
+  // vagas dos próximos 2 dias que ainda não têm post do piloto
+  function vagasAbertas() {
+    const c = cfgP(), vagas = [];
+    for (const desloc of [0, 1]) {
+      const dia = new Date(Date.now() - 3 * 3600e3 + desloc * 864e5).toISOString().slice(0, 10);
+      c.horarios.forEach((h) => {
+        const quando = isoBrasilia(dia, h.hora);
+        if (Date.parse(quando) < Date.now() + 35 * 60e3) return; // perto demais: não dá tempo de montar o Reel
+        const vaga = dia + " " + h.hora;
+        if (db.posts.some((p) => p.vaga === vaga)) return;
+        if ((db.piloto.tentativas[vaga] || 0) >= 4) return; // desistiu dessa vaga (não gasta IA à toa)
+        vagas.push({ vaga, quando, formato: FORMATOS_PILOTO.includes(h.formato) ? h.formato : "reels", foco: FOCOS[h.foco] ? h.foco : "tecnicos" });
+      });
+    }
+    return vagas.sort((a, b) => Date.parse(a.quando) - Date.parse(b.quando));
+  }
+  async function criarPostDaVaga(v) {
+    db.piloto.tentativas[v.vaga] = (db.piloto.tentativas[v.vaga] || 0) + 1; salvar();
+    const ja = (await legendasJaPublicadas().catch(() => [])).slice(0, 25)
+      .concat(db.posts.filter((p) => p.origem === "piloto" && p.status !== "publicado").map((p) => ({ texto: p.legenda })))
+      .map((x) => "- " + String(x.texto).split("\n")[0].slice(0, 100)).join("\n");
+    const j = await iaJson(sistemaRoteiro({ foco: v.foco, n: 1, formato: v.formato }),
+      "Já publicados ou já na fila (NÃO repetir gancho nem assunto):\n" + (ja || "(nenhum)") + `\n\nCrie 1 post no formato ${v.formato}.`, 0.95);
+    const x = [].concat(j.posts || [])[0];
+    if (!x || !x.legenda) throw new Error("a IA não devolveu o post");
+    x.formato = v.formato;
+    const p = postDoItem(x, v.quando, v.foco);
+    p.origem = "piloto"; p.vaga = v.vaga;
+    p.redes = cfgP().redes.filter((r) => PUBLICADORES[r]);
+    if (!estudio) throw new Error("estúdio indisponível no servidor (ffmpeg)");
+    // mídia: modelos do Aécio como fundo, texto e narração sempre novos
+    if (v.formato === "reels") {
+      const cenas = cenasDe(p).map((c) => {
+        if (/^app_/.test(c.tipo || "")) return c;
+        const m = escolherModelo("video") || escolherModelo("imagem");
+        return m ? Object.assign({}, c, { modelo: { arquivo: m.arquivo, inicio: m.tipo === "video" ? Math.random() * 20 : 0 } }) : c;
+      });
+      await montarReel(p, { cenas });
+    } else {
+      const roteiro = roteiroDe(p);
+      const slides = v.formato === "carrossel" ? Math.min(Math.max(roteiro.length, 3), 6) : 1;
+      if (slides === 1) await montarArte(p, (escolherModelo("imagem") || {}).arquivo);
+      else for (let i = 0; i < slides; i++) {
+        const m = escolherModelo("imagem");
+        const d = { titulo: limparLinha(roteiro[i] || p.gancho), destaque: "", texto: "", chamada: i === slides - 1 ? chamadaDe(p) : "" };
+        p.midias.push(m ? await estudio.arteModelo(m.arquivo, d) : await estudio.arte(d));
+      }
+      // TikTok só aceita vídeo: a arte vira um vídeo curto narrado
+      if (p.redes.includes("tiktok")) {
+        const cenas = roteiro.slice(0, 4).map((t, i) => {
+          const m = escolherModelo("video") || escolherModelo("imagem");
+          const txt = limparLinha(t);
+          return Object.assign({ tela: txt.slice(0, 80), fala: txt }, i === 0 && p.gancho ? { tela: p.gancho.slice(0, 80), fala: p.gancho } : {},
+            m ? { modelo: { arquivo: m.arquivo, inicio: m.tipo === "video" ? Math.random() * 20 : 0 } } : {});
+        });
+        await montarReel(p, { cenas, soTiktok: true });
+      }
+    }
+    const prob = problemasDoPost(p).filter((t) => !/story/.test(t));
+    const rep = await conferirRepetido(p).catch(() => "");
+    p.status = cfgP().aprovacao === "auto" && !prob.length && !rep ? "aprovado" : "rascunho";
+    if (prob.length || rep) p.aviso = "Piloto: " + (rep || prob.join(", "));
+    db.posts.push(p); salvar();
+    logPiloto(`${v.vaga}: ${v.formato} criado${p.status === "aprovado" ? " e agendado" : " (esperando sua aprovação)"} — "${String(p.gancho || p.tema).slice(0, 60)}"`);
+    return p;
+  }
+  let pilotoOcupado = false;
+  async function rodarPiloto(forcar) {
+    if (pilotoOcupado || !(cfgP().ligado || forcar) || !(SENHA() || db.senha)) return null;
+    pilotoOcupado = true;
+    try {
+      const v = vagasAbertas()[0];
+      if (!v) return null;
+      return await criarPostDaVaga(v);
+    } catch (e) {
+      logPiloto("não consegui criar o próximo post (" + e.message + "). Tento de novo em 10 min.");
+      throw e;
+    } finally { pilotoOcupado = false; }
+  }
+  // a cada 10 min: completa a fila de hoje e de amanhã, um post por vez (Reel leva ~2 min)
+  setInterval(() => rodarPiloto().catch(() => {}), 10 * 60e3).unref();
+  setTimeout(() => rodarPiloto().catch(() => {}), 60e3).unref();
+  function estadoPiloto() {
+    const fila = db.posts.filter((p) => p.origem === "piloto" && ["rascunho", "aprovado", "publicando"].includes(p.status))
+      .sort((a, b) => Date.parse(a.quando) - Date.parse(b.quando)).slice(0, 8)
+      .map((p) => ({ id: p.id, quando: p.quando, formato: p.formato, status: p.status, gancho: p.gancho || p.tema, redes: p.redes, aviso: p.aviso || "" }));
+    return { config: cfgP(), fila, log: db.piloto.log.slice(0, 12), ocupado: pilotoOcupado, vagas: vagasAbertas().length };
+  }
+  function salvarPiloto(c) {
+    const atual = cfgP();
+    if (typeof c.ligado === "boolean") atual.ligado = c.ligado;
+    if (c.aprovacao === "auto" || c.aprovacao === "revisar") atual.aprovacao = c.aprovacao;
+    if (Array.isArray(c.redes)) { const r = c.redes.filter((x) => PUBLICADORES[x]); if (!r.length) throw new Error("Marque pelo menos uma rede."); atual.redes = r; }
+    if (Array.isArray(c.horarios)) {
+      const h = c.horarios.filter((x) => x && /^([01]\d|2[0-3]):[0-5]\d$/.test(x.hora)).slice(0, 6)
+        .map((x) => ({ hora: x.hora, formato: FORMATOS_PILOTO.includes(x.formato) ? x.formato : "reels", foco: FOCOS[x.foco] ? x.foco : "tecnicos" }));
+      if (!h.length) throw new Error("Coloque pelo menos um horário.");
+      if (new Set(h.map((x) => x.hora)).size !== h.length) throw new Error("Há dois horários iguais.");
+      atual.horarios = h.sort((a, b) => a.hora.localeCompare(b.hora));
+    }
+    // horário trocado: libera as vagas que desistiram
+    db.piloto.tentativas = {};
+    salvar();
+    return estadoPiloto();
+  }
+
   // ------------------------------------------------------------ rotas
   async function tratar(req, res, url) {
     const auth = autorizado(req);
@@ -628,6 +838,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
         podeConectar: Boolean(env("META_APP_ID") && env("META_APP_SECRET")),
         temAppId: Boolean(env("META_APP_ID")),
         urlPublica: URL_PUBLICA(), config: Object.assign({}, db.config, { pexels: db.config.pexels ? "configurada" : "" }),
+        tiktok: tiktok.estado(), piloto: estadoPiloto(), modelos: db.modelos,
         posts: db.posts.slice().sort((a, b) => Date.parse(b.atualizadoEm) - Date.parse(a.atualizadoEm)).slice(0, 200)
           .map((p) => Object.assign({}, p, { problemas: problemasDoPost(p) })),
       });
@@ -698,28 +909,25 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
       const p = acharPost(String(corpo.id || ""));
       if (!p) return enviarJson(res, 404, { erro: "Post não encontrado." });
       if (["publicando", "publicado"].includes(p.status)) return enviarJson(res, 409, { erro: "Post já publicado." });
-      const roteiro = (p.roteiro && p.roteiro.length ? p.roteiro : [p.gancho || p.tema || p.legenda.split("\n")[0]]).filter(Boolean);
-      const limpar = (t) => String(t).replace(/^\s*(\d+[-–]?\d*\s*s?:|slide\s*\d+:|cena\s*\d+:)\s*/i, "").trim();
-      if (url === "/api/mkt/arte") {
-        const titulo = limpar(p.gancho || roteiro[0] || p.tema);
-        const m = await estudio.arte({ titulo, destaque: "", texto: roteiro.slice(p.gancho ? 0 : 1, 4).map(limpar).join(" · ").slice(0, 220), chamada: p.foco === "clientes" ? "Peça seu técnico pelo app" : "Cadastro grátis · link na bio" });
-        p.midias = (p.midias || []).concat([m]).slice(-10);
-      } else {
-        // cada linha do roteiro vira uma cena: texto grande na tela + o Antonio narrando
-        const cenas = (p.cenas && p.cenas.length) ? p.cenas : roteiro.slice(0, 7).map((t) => {
-          const txt = limpar(t), fala = (txt.match(/fala:\s*(.+)$/i) || [])[1] || txt.replace(/texto:\s*/i, "");
-          const tela = ((txt.match(/texto(?: na tela)?:\s*([^—|]+)/i) || [])[1] || txt).split(/fala:/i)[0].slice(0, 90);
-          return { tela: tela.trim(), fala: fala.trim().slice(0, 300) };
-        });
-        const assinaturas = { clientes: "Técnico perto de você pelo app", solar: "Energia solar com quem entende", sistemas: "Sua empresa organizada de verdade" };
-        p.video = await estudio.reel(cenas, p.foco === "clientes" ? "Peça pelo app HERUPU" : p.foco === "solar" ? "Chama no WhatsApp" : "Cadastro grátis · link na bio",
-          db.config.pexels || env("PEXELS_KEY"), assinaturas[p.foco] || "Seja o primeiro da sua cidade");
-        p.formato = "reels";
-      }
+      if (url === "/api/mkt/arte") await montarArte(p); else await montarReel(p);
       if (p.status === "aprovado") p.status = "rascunho";
       p.atualizadoEm = new Date().toISOString(); salvar();
       return enviarJson(res, 200, Object.assign({}, p, { problemas: problemasDoPost(p) }));
     }
+    if (url === "/api/mkt/piloto") return enviarJson(res, 200, corpo && Object.keys(corpo).length ? salvarPiloto(corpo) : estadoPiloto());
+    if (url === "/api/mkt/piloto/agora") {
+      if (pilotoOcupado) return enviarJson(res, 409, { erro: "O piloto já está montando um post. Espere uns 2 minutos." });
+      const p = await rodarPiloto(true);
+      return enviarJson(res, 200, { post: p, piloto: estadoPiloto(), msg: p ? "" : "A fila de hoje e amanhã já está completa." });
+    }
+    if (url === "/api/mkt/modelo") {
+      const m = salvarMidia(String(corpo.base64 || ""), String(corpo.tipo || ""));
+      return enviarJson(res, 200, registrarModelo(m.arquivo, corpo.nome, "imagem"));
+    }
+    if (url === "/api/mkt/modelo-excluir") { db.modelos = db.modelos.filter((m) => m.arquivo !== String(corpo.arquivo || "")); salvar(); return enviarJson(res, 200, { ok: true }); }
+    if (url === "/api/mkt/tiktok/chaves") { tiktok.salvarChaves(corpo); return enviarJson(res, 200, tiktok.estado()); }
+    if (url === "/api/mkt/tiktok/iniciar") return enviarJson(res, 200, { url: tiktok.iniciar() });
+    if (url === "/api/mkt/tiktok/desconectar") { tiktok.desconectar(); return enviarJson(res, 200, tiktok.estado()); }
     if (url === "/api/mkt/diagnostico") return enviarJson(res, 200, await diagnostico());
     if (url === "/api/mkt/plano") return enviarJson(res, 200, { posts: await planoDaSemana({ foco: corpo.foco, quantidade: corpo.quantidade, inicio: corpo.inicio }) });
     if (url === "/api/mkt/links") return enviarJson(res, 200, { links: db.links, base: URL_PUBLICA() + "/r/" });
@@ -765,6 +973,13 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
   }
   function rotear(req, res, url) {
     if (req.method === "POST" && url === "/api/mkt/clipe") { receberClipe(req, res); return true; }
+    if (req.method === "POST" && url === "/api/mkt/modelo-video") { receberModeloVideo(req, res); return true; }
+    if (req.method === "GET" && url === "/mkt/tiktok/retorno") {
+      tiktok.receberRetorno(new URL(req.url, "http://x"))
+        .then((c) => paginaRetorno(res, true, "TikTok conectado" + (c.usuario ? ": " + c.usuario : "")))
+        .catch((e) => paginaRetorno(res, false, e.message));
+      return true;
+    }
     if (req.method === "GET" && url.startsWith("/midia/")) { servirMidia(res, url); return true; }
     if (req.method === "GET" && /^\/r\/[a-z0-9-]{1,30}$/.test(url)) { contarClique(url.slice(3), res); return true; }
     if (req.method === "GET" && url === "/mkt/meta/retorno") {
@@ -779,5 +994,5 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     return true;
   }
 
-  return { rotear, publicar, rodarAgenda, _db: () => db };
+  return { rotear, publicar, rodarAgenda, rodarPiloto, _db: () => db };
 };

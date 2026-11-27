@@ -86,7 +86,12 @@
       $("btnConectarMeta").hidden = !j.podeConectar;
       if (!j.conexao) $("blocoSegredo").open = !j.podeConectar;
       if (!j.podeConectar && !j.meta) $("statusMeta").textContent += " Para usar o botão, o servidor precisa de META_APP_ID e META_APP_SECRET no .env.";
-      if (!j.meta) c.appendChild(el("span", { texto: "  · conecte em Ajustes" }));
+      c.appendChild(document.createTextNode("   "));
+      c.appendChild(el("span", { classe: j.tiktok && j.tiktok.conectado ? "ok" : "falta", texto: j.tiktok && j.tiktok.conectado ? "● TikTok conectado" : "○ TikTok não conectado" }));
+      if (!j.meta || !(j.tiktok && j.tiktok.conectado)) c.appendChild(el("span", { texto: "  · conecte em Ajustes" }));
+      desenharTiktok(j.tiktok || {});
+      estado.piloto = j.piloto; estado.modelos = j.modelos || [];
+      desenharPiloto(); desenharModelos();
       $("cfgContexto").value = j.config.contexto || "";
       $("cfgKit").value = j.config.kit || "";
       $("cfgAuto").checked = !!j.config.autoResponder;
@@ -98,7 +103,7 @@
   // ------------------------------------------------------------ abas
   function abrirAba(nome) {
     document.querySelectorAll(".mkt-abas button").forEach(function (b) { b.setAttribute("aria-selected", b.dataset.aba === nome ? "true" : "false"); });
-    ["posts", "estrategia", "novo", "comentarios", "relatorio", "ajustes"].forEach(function (a) { $("aba-" + a).hidden = a !== nome; });
+    ["posts", "piloto", "estrategia", "novo", "comentarios", "relatorio", "ajustes"].forEach(function (a) { $("aba-" + a).hidden = a !== nome; });
     aviso("");
   }
   document.querySelectorAll(".mkt-abas button").forEach(function (b) {
@@ -162,12 +167,15 @@
       card.appendChild(el("div", { classe: "texto", texto: p.legenda || "(sem legenda)" }));
       Object.keys(p.resultados || {}).forEach(function (rede) {
         var r = p.resultados[rede];
-        var linha = el("p", { classe: "resultado " + (r.ok ? "ok" : "falha") }, [rede + ": " + (r.ok ? "publicado " : "falhou: " + r.erro + " ")]);
+        var linha = el("p", { classe: "resultado " + (r.ok ? "ok" : "falha") }, [rede + ": " + (r.ok ? "publicado " + (r.aviso ? "(" + r.aviso + ") " : "") : "falhou: " + r.erro + " ")]);
         if (r.ok && r.link) linha.appendChild(el("a", { href: r.link, target: "_blank", rel: "noopener", texto: "ver post" }));
         card.appendChild(linha);
       });
       if (p.problemas && p.problemas.length && p.status !== "publicado") card.appendChild(el("p", { classe: "problemas", texto: "Falta: " + p.problemas.join(", ") }));
       var acoes = el("div", { classe: "acoes" });
+      if (p.aviso && p.status !== "publicado") card.appendChild(el("p", { classe: "problemas", texto: p.aviso }));
+      if (p.origem === "piloto") card.querySelector(".topo-card span").appendChild(el("span", { classe: "selo selo-formato", texto: "🤖 piloto" }));
+      if (p.videoTiktok && !p.video) card.appendChild(el("details", {}, [el("summary", { texto: "Vídeo para o TikTok" }), el("video", { src: p.videoTiktok.url, controls: "", playsinline: "", preload: "none", style: "width:100%;max-height:420px;border-radius:10px;background:#000" })]));
       if (p.video) card.appendChild(el("video", { src: p.video.url, controls: "", playsinline: "", preload: "metadata", style: "width:100%;max-height:420px;border-radius:10px;margin:8px 0;background:#000" }));
       if (p.status !== "publicado" && p.status !== "publicando") {
         acoes.appendChild(el("button", { classe: "botao principal", type: "button", texto: "✦ Gerar arte", onclick: function (e) { gerarMidia(p, "arte", e.target); } }));
@@ -226,7 +234,7 @@
     estado.editando = null; estado.midias = [];
     $("tituloEditor").textContent = "NOVO POST";
     $("tema").value = ""; $("legenda").value = ""; $("quando").value = "";
-    $("redeInstagram").checked = true; $("redeFacebook").checked = false;
+    $("redeInstagram").checked = true; $("redeFacebook").checked = false; $("redeTiktok").checked = false;
     $("ideiaImagem").hidden = true;
     $("formato").value = "imagem"; desenharRoteiro(null);
     contar(); desenharMidias();
@@ -245,6 +253,7 @@
     $("quando").value = paraCampoData(p.quando);
     $("redeInstagram").checked = p.redes.indexOf("instagram") >= 0;
     $("redeFacebook").checked = p.redes.indexOf("facebook") >= 0;
+    $("redeTiktok").checked = p.redes.indexOf("tiktok") >= 0;
     $("formato").value = p.formato || "imagem"; desenharRoteiro(p);
     $("ideiaImagem").hidden = !p.ideiaImagem;
     if (p.ideiaImagem) $("ideiaImagem").textContent = "Ideia de imagem: " + p.ideiaImagem;
@@ -258,6 +267,7 @@
     var redes = [];
     if ($("redeInstagram").checked) redes.push("instagram");
     if ($("redeFacebook").checked) redes.push("facebook");
+    if ($("redeTiktok").checked) redes.push("tiktok");
     return {
       id: estado.editando || undefined, redes: redes, tema: $("tema").value.trim(), legenda: $("legenda").value,
       midias: estado.midias, formato: $("formato").value, quando: $("quando").value ? new Date($("quando").value).toISOString() : null
@@ -502,7 +512,170 @@
     }).catch(function (err) { aviso(err.message); }).then(volta);
   });
 
-  // volta do login da Meta
+
+  // ------------------------------------------------------------ piloto automático
+  var NOMES_FOCO = { tecnicos: "Captar técnicos", clientes: "Captar clientes", solar: "Energia solar", sistemas: "HERUPU SISTEMAS", misto: "Marca em geral" };
+  var NOMES_FORMATO = { reels: "Reel (vídeo)", imagem: "Arte (imagem)", carrossel: "Carrossel" };
+  function selecao(opcoes, valor) {
+    var s = el("select");
+    Object.keys(opcoes).forEach(function (k) { var o = el("option", { value: k, texto: opcoes[k] }); if (k === valor) o.selected = true; s.appendChild(o); });
+    return s;
+  }
+  function linhaHorario(h) {
+    var hora = el("input", { type: "time", value: h.hora || "12:00" });
+    var linha = el("div", { classe: "mkt-horario", style: "display:grid;grid-template-columns:90px 1fr 1fr 36px;gap:6px;margin:6px 0;align-items:center" }, [
+      hora, selecao(NOMES_FORMATO, h.formato || "reels"), selecao(NOMES_FOCO, h.foco || "tecnicos"),
+      el("button", { type: "button", classe: "botao", "aria-label": "Tirar horário", texto: "×", onclick: function () { linha.remove(); } })
+    ]);
+    return linha;
+  }
+  function desenharPiloto() {
+    var pl = estado.piloto; if (!pl) return;
+    var c = pl.config;
+    $("pilotoLigado").checked = !!c.ligado;
+    $("pilotoAprovacao").value = c.aprovacao;
+    $("pilotoIG").checked = c.redes.indexOf("instagram") >= 0;
+    $("pilotoFB").checked = c.redes.indexOf("facebook") >= 0;
+    $("pilotoTT").checked = c.redes.indexOf("tiktok") >= 0;
+    var box = $("pilotoHorarios");
+    if (!box.dataset.mexido) { box.textContent = ""; c.horarios.forEach(function (h) { box.appendChild(linhaHorario(h)); }); }
+    var st = $("pilotoStatus"); st.textContent = "";
+    st.appendChild(el("span", { classe: c.ligado ? "ok" : "falta", texto: c.ligado ? "● Ligado: " + c.horarios.length + " posts por dia" : "○ Desligado" }));
+    if (pl.ocupado) st.appendChild(el("span", { texto: "  · montando um post agora…" }));
+    else if (c.ligado && pl.vagas) st.appendChild(el("span", { texto: "  · " + pl.vagas + " na fila para montar (um a cada 10 min)" }));
+    var fila = $("pilotoFila"); fila.textContent = "";
+    if (!pl.fila.length) fila.appendChild(el("p", { classe: "nota", texto: c.ligado ? "Nada na fila ainda. O primeiro post fica pronto em poucos minutos." : "Ligue o piloto e salve." }));
+    pl.fila.forEach(function (p) {
+      fila.appendChild(el("div", { classe: "mkt-link" }, [
+        el("div", {}, [el("div", { texto: dataBonita(p.quando) + " · " + (NOMES_FORMATO[p.formato] || p.formato) }), el("div", { classe: "nota", texto: p.gancho || "" }),
+          p.aviso ? el("div", { classe: "problemas", texto: p.aviso }) : null]),
+        el("span", { classe: "selo selo-" + p.status, texto: NOMES_STATUS[p.status] || p.status })
+      ]));
+    });
+    var log = $("pilotoLog"); log.textContent = "";
+    pl.log.forEach(function (l) { log.appendChild(el("li", { texto: dataBonita(l.em) + ": " + l.texto })); });
+  }
+  $("pilotoHorarios").addEventListener("input", function () { $("pilotoHorarios").dataset.mexido = "1"; });
+  $("pilotoHorarios").addEventListener("change", function () { $("pilotoHorarios").dataset.mexido = "1"; });
+  $("btnMaisHorario").addEventListener("click", function () {
+    $("pilotoHorarios").dataset.mexido = "1";
+    $("pilotoHorarios").appendChild(linhaHorario({ hora: "16:00", formato: "reels", foco: "tecnicos" }));
+  });
+  $("btnSalvarPiloto").addEventListener("click", function (e) {
+    var redes = [];
+    if ($("pilotoIG").checked) redes.push("instagram");
+    if ($("pilotoFB").checked) redes.push("facebook");
+    if ($("pilotoTT").checked) redes.push("tiktok");
+    var horarios = Array.prototype.map.call($("pilotoHorarios").children, function (l) {
+      var c = l.querySelectorAll("input,select");
+      return { hora: c[0].value, formato: c[1].value, foco: c[2].value };
+    });
+    var volta = ocupado(e.target, "Salvando…");
+    api("piloto", { ligado: $("pilotoLigado").checked, aprovacao: $("pilotoAprovacao").value, redes: redes, horarios: horarios }).then(function (pl) {
+      delete $("pilotoHorarios").dataset.mexido;
+      estado.piloto = pl; desenharPiloto();
+      aviso(pl.config.ligado ? "✔ Piloto ligado. Ele monta os posts de hoje e amanhã sozinho, um a cada 10 minutos." : "Piloto salvo (desligado).");
+    }).catch(function (err) { aviso(err.message); }).then(volta);
+  });
+  $("btnPilotoAgora").addEventListener("click", function (e) {
+    var volta = ocupado(e.target, "Criando roteiro e mídia (até 3 min)…");
+    api("piloto/agora", {}).then(function (j) {
+      aviso(j.post ? "✔ Post criado para " + dataBonita(j.post.quando) + (j.post.status === "aprovado" ? " e já agendado." : ". Ele espera sua aprovação em Posts.") : j.msg);
+      return carregar();
+    }).catch(function (err) { aviso(err.message); }).then(volta);
+  });
+  document.querySelector('[data-aba="piloto"]').addEventListener("click", function () { carregar().catch(function () { /* ok */ }); });
+
+  // ------------------------------------------------------------ modelos
+  function desenharModelos() {
+    var box = $("listaModelos"); box.textContent = "";
+    var img = 0, vid = 0;
+    (estado.modelos || []).forEach(function (m) {
+      if (m.tipo === "video") vid++; else img++;
+      box.appendChild(el("figure", { title: m.nome + " · usado " + (m.usos || 0) + "x" }, [
+        m.tipo === "video" ? el("video", { src: m.url, muted: "", playsinline: "", preload: "metadata" }) : el("img", { src: m.url, alt: "", loading: "lazy" }),
+        el("button", { type: "button", "aria-label": "Tirar modelo", texto: "×", onclick: function (ev) {
+          if (!confirmarNoBotao(ev.target, "?")) return;
+          api("modelo-excluir", { arquivo: m.arquivo }).then(carregar).catch(function (err) { aviso(err.message); });
+        } })
+      ]));
+    });
+    $("notaModelos").textContent = img + " imagens e " + vid + " vídeos. " + (img + vid ? "" : "Sem modelos, o piloto usa as artes da HERUPU e os vídeos do Pexels.");
+  }
+  $("modeloImagens").addEventListener("change", function (e) {
+    var arqs = Array.prototype.slice.call(e.target.files || [], 0, 30); e.target.value = "";
+    var n = 0;
+    arqs.reduce(function (p, a) {
+      return p.then(function () {
+        $("notaModelos").textContent = "Enviando imagem " + (++n) + " de " + arqs.length + "…";
+        return prepararModelo(a).then(function (b64) { return api("modelo", { base64: b64, tipo: "image/jpeg", nome: a.name }); }).catch(function (err) { aviso(err.message); });
+      });
+    }, Promise.resolve()).then(carregar);
+  });
+  // modelo de imagem: só reduz e converte para JPG (o enquadramento é feito no servidor)
+  function prepararModelo(arquivo) {
+    return new Promise(function (ok, falha) {
+      var url = URL.createObjectURL(arquivo), img = new Image();
+      img.onload = function () {
+        URL.revokeObjectURL(url);
+        var esc = Math.min(1, 1920 / Math.max(img.naturalWidth, img.naturalHeight));
+        var t = document.createElement("canvas"); t.width = Math.round(img.naturalWidth * esc); t.height = Math.round(img.naturalHeight * esc);
+        t.getContext("2d").drawImage(img, 0, 0, t.width, t.height);
+        ok(t.toDataURL("image/jpeg", 0.88).split(",")[1]);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); falha(new Error("Não consegui abrir " + arquivo.name)); };
+      img.src = url;
+    });
+  }
+  $("modeloVideos").addEventListener("change", function (e) {
+    var arqs = Array.prototype.slice.call(e.target.files || [], 0, 10); e.target.value = "";
+    var n = 0;
+    arqs.reduce(function (p, f) {
+      return p.then(function () {
+        n++;
+        return new Promise(function (ok) {
+          var x = new XMLHttpRequest();
+          x.open("POST", "/api/mkt/modelo-video?nome=" + encodeURIComponent(f.name));
+          x.setRequestHeader("x-herupu-senha", senha);
+          x.upload.onprogress = function (ev) { if (ev.lengthComputable) $("notaModelos").textContent = "Vídeo " + n + " de " + arqs.length + ": enviando " + Math.round(ev.loaded / ev.total * 100) + "%" + (ev.loaded === ev.total ? " · ajustando para 9:16…" : ""); };
+          x.onload = function () {
+            if (x.status !== 200) { var j = {}; try { j = JSON.parse(x.responseText); } catch (er) { /* ok */ } aviso(j.erro || (x.status === 413 ? "Vídeo grande demais para o servidor (falta o ajuste do nginx)." : "Erro " + x.status)); }
+            ok();
+          };
+          x.onerror = function () { aviso("Falha no envio de " + f.name + "."); ok(); };
+          x.send(f);
+        });
+      });
+    }, Promise.resolve()).then(carregar);
+  });
+
+  // ------------------------------------------------------------ TikTok
+  function desenharTiktok(t) {
+    $("redirTiktok").textContent = t.redirect || "";
+    $("statusTiktok").textContent = t.conectado
+      ? "Conectado" + (t.usuario ? " como " + t.usuario : "") + " desde " + dataBonita(t.em) + "." + (t.privado ? " Os vídeos saem PRIVADOS até o app do TikTok passar na auditoria." : "")
+      : (t.chaves ? "Chaves salvas. Toque em Conectar TikTok." : "Primeiro cole as chaves do app do TikTok (abaixo).");
+    $("btnConectarTiktok").hidden = !t.chaves || t.conectado;
+    $("btnDesconectarTiktok").hidden = !t.conectado;
+    if (!t.chaves) $("blocoTiktok").open = true;
+  }
+  $("btnChavesTiktok").addEventListener("click", function (e) {
+    var volta = ocupado(e.target, "Salvando…");
+    api("tiktok/chaves", { chave: $("ttChave").value, segredo: $("ttSegredo").value }).then(function () {
+      $("ttChave").value = ""; $("ttSegredo").value = ""; $("blocoTiktok").open = false;
+      aviso("✔ Chaves salvas. Agora toque em CONECTAR TIKTOK."); return carregar();
+    }).catch(function (err) { aviso(err.message); }).then(volta);
+  });
+  $("btnConectarTiktok").addEventListener("click", function (e) {
+    var volta = ocupado(e.target, "Abrindo o TikTok…");
+    api("tiktok/iniciar", {}).then(function (j) { location.href = j.url; }).catch(function (err) { aviso(err.message); volta(); });
+  });
+  $("btnDesconectarTiktok").addEventListener("click", function (e) {
+    if (!confirmarNoBotao(e.target, "Toque de novo para desconectar")) return;
+    api("tiktok/desconectar", {}).then(carregar).catch(function (err) { aviso(err.message); });
+  });
+
+  // volta do login da Meta / TikTok
   (function () {
     var q = new URLSearchParams(location.search);
     if (!q.get("meta")) return;

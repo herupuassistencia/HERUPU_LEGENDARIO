@@ -77,3 +77,17 @@ voltar, ler a tela), palavra de chamada em segundo plano e esfera flutuante. Nun
 pagamento/apagar. Gerar: `cd android && ./gradlew assembleRelease` (SDK Android 35). O APK pronto fica em
 `site/HERUPU-LEGENDARIO.apk` → https://ia.herupusistemas.com.br/HERUPU-LEGENDARIO.apk
 A chave de assinatura (android/assinatura) precisa ser a mesma em toda versão, senão o Android não atualiza por cima.
+
+## Piloto automático (posts sozinhos, 3 por dia)
+Aba **🤖 Piloto** do painel de marketing.
+
+- Escolha os horários (padrão 09:00 Reel, 13:00 arte, 19:30 Reel), o foco de cada um e as redes (Instagram, Facebook, TikTok).
+- O LEGENDÁRIO monta sozinho os posts de **hoje e amanhã**, um a cada 10 minutos: roteiro e legenda pela IA grátis,
+  arte ou Reel no estúdio (ffmpeg + voz do Antonio) e agenda. Não usa o Claude nem navegador.
+- **Aprovação:** "Publicar sozinho" agenda direto; "Esperar eu aprovar" deixa como rascunho.
+- **Modelos:** envie em "Meus modelos" as imagens e vídeos já criados (Gemini, Flow, Canva). Cada post usa um modelo
+  diferente como fundo (o menos usado), com texto, chamada e narração novos. Vídeos são convertidos para 9:16 sem som.
+- **Nunca repete:** passa pela mesma trava de legenda/imagem repetida dos posts manuais.
+- **TikTok** só recebe vídeo: nos posts de arte, o piloto gera também um vídeo curto narrado só para o TikTok.
+  Enquanto o app do TikTok não passa na auditoria, o TikTok só aceita os vídeos como **privados**.
+- Conectar o TikTok: Ajustes → Chaves do app do TikTok → Conectar TikTok.

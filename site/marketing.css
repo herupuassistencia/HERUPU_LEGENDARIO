@@ -31,7 +31,7 @@
 
 .mkt-midias { display: flex; gap: 8px; flex-wrap: wrap; }
 .mkt-midias figure { position: relative; margin: 0; width: 86px; height: 86px; border-radius: 10px; overflow: hidden; border: 1px solid var(--borda); }
-.mkt-midias img { width: 100%; height: 100%; object-fit: cover; }
+.mkt-midias img, .mkt-midias video { width: 100%; height: 100%; object-fit: cover; }
 .mkt-midias button {
   position: absolute; top: 3px; right: 3px; width: 26px; height: 26px; border-radius: 50%;
   border: 0; background: rgba(0,0,0,.75); color: #fff; font-size: 15px; line-height: 26px; cursor: pointer;

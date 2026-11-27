@@ -23,3 +23,9 @@ META_IG_TOKEN=
 # Opcionais:
 # META_GRAPH_VERSAO=v23.0
 # MKT_URL_PUBLICA=https://ia.herupusistemas.com.br
+
+# ---- TikTok (piloto automático) ----
+# Chaves do app do TikTok (as mesmas da Central). Também dá para colar no painel em Ajustes → TikTok.
+# No app do TikTok, cadastre o Redirect URI: https://ia.herupusistemas.com.br/mkt/tiktok/retorno
+# TIKTOK_CLIENT_KEY=
+# TIKTOK_CLIENT_SECRET=

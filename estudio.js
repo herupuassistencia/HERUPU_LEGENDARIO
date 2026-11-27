@@ -126,6 +126,24 @@ function svgApp({ tipo, tela, servico, local, cena }) {
   <image href="${LEAO}" x="${X + 40}" y="${Y + 50}" width="64" height="64" clip-path="url(#r)"/><text x="${X + 125}" y="${Y + 95}" class="m">HERUPU ${tipo === "app_pedido" ? "Cliente" : "Técnico"}</text>
   ${ui}</svg>`;
 }
+// texto da arte por cima de uma foto/arte modelo: escurece o fundo e escreve no padrão HERUPU
+function svgSobreArte({ titulo, texto, chamada, largura = 1080, altura = 1350 }) {
+  const l1 = quebrar(titulo, 19).slice(0, 4);
+  let y = altura - 230 - 58 * Math.min(quebrar(texto, 34).length, 3) - 92 * l1.length, out = "";
+  for (const l of l1) { out += `<text x="80" y="${y}" class="t">${esc(l)}</text>`; y += 92; }
+  y += 20;
+  for (const l of quebrar(texto, 34).slice(0, 3)) { out += `<text x="80" y="${y}" class="s">${esc(l)}</text>`; y += 58; }
+  const cta = chamada ? `<rect x="80" y="${altura - 190}" width="${largura - 160}" height="110" rx="24" fill="#22c55e"/>
+    <text x="${largura / 2}" y="${altura - 118}" text-anchor="middle" class="c">${esc(chamada)}</text>` : "";
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${largura}" height="${altura}">
+  <style>.t{font-family:Poppins;font-size:80px;font-weight:800;fill:#fff;paint-order:stroke;stroke:#000;stroke-width:6px;stroke-linejoin:round}.s{font-family:Poppins;font-size:42px;font-weight:600;fill:#e2e8f0;paint-order:stroke;stroke:#000;stroke-width:4px}.c{font-family:Poppins;font-size:46px;font-weight:800;fill:#0b1020}.m{font-family:Poppins;font-size:40px;font-weight:800;fill:#fff;paint-order:stroke;stroke:#000;stroke-width:5px}</style>
+  <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity=".55"/><stop offset=".22" stop-color="#000" stop-opacity="0"/>
+  <stop offset=".42" stop-color="#000" stop-opacity=".15"/><stop offset="1" stop-color="#05070d" stop-opacity=".92"/></linearGradient>
+  <clipPath id="r"><rect x="80" y="70" width="96" height="96" rx="22"/></clipPath></defs>
+  <rect width="100%" height="100%" fill="url(#g)"/>
+  <image href="${LEAO}" x="80" y="70" width="96" height="96" clip-path="url(#r)"/><text x="200" y="132" class="m">HERUPU</text>
+  ${out}${cta}</svg>`;
+}
 const png = (svg) => new Resvg(svg, { font: { fontFiles: FONTES, loadSystemFonts: false, defaultFontFamily: "Poppins" } }).render().asPng();
 const rodar = (args) => new Promise((ok, falha) => execFile("ffmpeg", ["-y", "-loglevel", "error", ...args], { timeout: 180000 }, (e, _o, err) => e ? falha(new Error("ffmpeg: " + (err || e.message).slice(0, 200))) : ok()));
 const temAudio = (arq) => new Promise((ok) => execFile("ffprobe", ["-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", arq], (e, o) => ok(Boolean(String(o || "").trim()))));
@@ -139,6 +157,21 @@ module.exports = function criarEstudio({ DIR_MIDIA, falarMp3 }) {
     const d = tmp(), p = path.join(d, "a.png"), arq = nome("jpg");
     fs.writeFileSync(p, png(svgArte(dados)));
     await rodar(["-i", p, "-q:v", "3", path.join(DIR_MIDIA, arq)]);
+    fs.rmSync(d, { recursive: true, force: true });
+    return { arquivo: arq, url: "/midia/" + arq };
+  }
+
+  // arte nova a partir de uma imagem modelo (enquadra em 4:5 e escreve o texto novo por cima)
+  async function arteModelo(modeloArquivo, dados) {
+    const fundo = path.join(DIR_MIDIA, path.basename(modeloArquivo));
+    if (!fs.existsSync(fundo)) return arte(dados);
+    const d = tmp(), p = path.join(d, "t.png"), arq = nome("jpg");
+    fs.writeFileSync(p, png(svgSobreArte(dados)));
+    // pequeno zoom/recorte diferente a cada uso: a mesma foto nunca sai idêntica
+    const z = (1 + Math.random() * 0.12).toFixed(3), ox = Math.random().toFixed(3), oy = Math.random().toFixed(3);
+    await rodar(["-i", fundo, "-i", p, "-filter_complex",
+      `[0:v]scale=1080*${z}:1350*${z}:force_original_aspect_ratio=increase,crop=1080:1350:(iw-1080)*${ox}:(ih-1350)*${oy},setsar=1[f];[f][1:v]overlay=0:0`,
+      "-frames:v", "1", "-q:v", "3", path.join(DIR_MIDIA, arq)]);
     fs.rmSync(d, { recursive: true, force: true });
     return { arquivo: arq, url: "/midia/" + arq };
   }
@@ -169,7 +202,9 @@ module.exports = function criarEstudio({ DIR_MIDIA, falarMp3 }) {
         partes.push(seg); continue;
       }
       const ehApp = /^app_/.test(c.tipo || "");
-      const fundo = ehApp ? null : await buscarPexels(c.busca || "", chavePexels, d, i);
+      const doModelo = !ehApp && c.modelo && fs.existsSync(path.join(DIR_MIDIA, c.modelo.arquivo))
+        ? { tipo: /\.mp4$/.test(c.modelo.arquivo) ? "video" : "foto", arq: path.join(DIR_MIDIA, c.modelo.arquivo), inicio: Number(c.modelo.inicio) || 0 } : null;
+      const fundo = ehApp ? null : doModelo || await buscarPexels(c.busca || "", chavePexels, d, i);
       if (ehApp) fs.writeFileSync(img, png(svgApp(c)));
       else if (fundo) fs.writeFileSync(img, png(svgSobreposicao({ tela: c.tela, chamada: ult ? chamada : "" })));
       else fs.writeFileSync(img, png(svgArte({ titulo: c.tela, destaque: c.destaque || "", texto: "", chamada: ult ? chamada : "", largura: 1080, altura: 1920, cena: `${i + 1}/${cenas.length}` })));
@@ -181,7 +216,7 @@ module.exports = function criarEstudio({ DIR_MIDIA, falarMp3 }) {
       const saidaV = ["-t", dur.toFixed(2), "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-c:a", "aac", "-ar", "44100", "-ac", "2", "-b:a", "128k", "-shortest", seg];
       if (fundo && fundo.tipo === "video") {
         // vídeo real de fundo, preenchendo a tela vertical, com o texto por cima e a narração
-        await rodar(["-stream_loop", "-1", "-i", fundo.arq, "-i", img, ...entradaAudio, "-filter_complex",
+        await rodar([...(fundo.inicio ? ["-ss", fundo.inicio.toFixed(2)] : []), "-stream_loop", "-1", "-i", fundo.arq, "-i", img, ...entradaAudio, "-filter_complex",
           "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1[f];[f][1:v]overlay=0:0,format=yuv420p[v];[2:a]apad[a]",
           "-map", "[v]", "-map", "[a]", ...saidaV]);
         partes.push(seg); continue;
@@ -215,5 +250,5 @@ module.exports = function criarEstudio({ DIR_MIDIA, falarMp3 }) {
     fs.rmSync(d, { recursive: true, force: true });
     return { arquivo: arq, url: "/midia/" + arq };
   }
-  return { arte, reel };
+  return { arte, arteModelo, reel, duracao };
 };
