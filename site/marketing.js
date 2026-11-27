@@ -135,7 +135,9 @@
           el("span", { classe: "quando", texto: p.redes.join(" + ") + " · " + dataBonita(p.quando) })
         ])
       ]);
-      if (p.midias.length) card.appendChild(el("div", { classe: "miniaturas" }, p.midias.map(function (m) { return el("img", { src: m.url, alt: "", loading: "lazy" }); })));
+      if (p.midias.length) card.appendChild(el("div", { classe: "miniaturas" }, p.midias.map(function (m, i) {
+        return el("img", { src: m.url, alt: "Arte " + (i + 1) + " (toque para ampliar)", loading: "lazy", style: "cursor:zoom-in", onclick: function () { verArtes(p.midias, i); } });
+      })));
       if (p.gancho) card.appendChild(el("p", { classe: "gancho", texto: "Gancho: " + p.gancho }));
       if (p.cenas && p.cenas.length) card.appendChild(el("details", {}, [el("summary", { texto: "Cenas do Reel (" + p.cenas.length + ")" }),
         el("ol", {}, p.cenas.map(function (c, n) {
@@ -513,6 +515,26 @@
   });
 
 
+  // ------------------------------------------------------------ ver arte em tela cheia (zoom de pinça no celular)
+  function verArtes(midias, inicio) {
+    var fundo = el("div", { style: "position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.95);overflow:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y pinch-zoom;padding:56px 0 24px" });
+    var fechar = function () { fundo.remove(); document.body.style.overflow = ""; };
+    var btn = el("button", { type: "button", "aria-label": "Fechar", texto: "✕ Fechar", style: "position:fixed;top:10px;right:10px;z-index:10000;padding:8px 14px;border-radius:999px;border:0;background:#22c55e;color:#0b1020;font-weight:800;font-size:16px", onclick: fechar });
+    fundo.appendChild(btn);
+    midias.forEach(function (m, i) {
+      if (midias.length > 1) fundo.appendChild(el("p", { texto: "Arte " + (i + 1) + " de " + midias.length, style: "color:#94a3b8;text-align:center;margin:14px 0 6px;font-size:14px" }));
+      var img = el("img", { src: m.url, alt: "Arte " + (i + 1), style: "display:block;width:100%;max-width:1080px;margin:0 auto;height:auto" });
+      // toque duplo: alterna 100% / 200% para ler texto pequeno
+      img.addEventListener("dblclick", function () { var g = img.style.width === "200%"; img.style.width = g ? "100%" : "200%"; img.style.maxWidth = g ? "1080px" : "none"; });
+      fundo.appendChild(img);
+      if (i === inicio) setTimeout(function () { img.scrollIntoView(); }, 50);
+    });
+    fundo.appendChild(el("a", { href: midias[inicio].url, target: "_blank", rel: "noopener", texto: "Abrir a imagem original (para baixar ou dar zoom)", style: "display:block;text-align:center;color:#60a5fa;margin:18px" }));
+    document.addEventListener("keydown", function esc(e) { if (e.key === "Escape") { fechar(); document.removeEventListener("keydown", esc); } });
+    document.body.style.overflow = "hidden";
+    document.body.appendChild(fundo);
+  }
+
   // ------------------------------------------------------------ piloto automático
   var SEGMENTOS = { tecnicos: "Captar técnicos", clientes: "Captar clientes", solar: "Energia solar", seguranca: "Segurança eletrônica", programacao: "Programação de sistemas" };
   var NOMES_FOCO = Object.assign({ rodizio: "Rodízio dos segmentos" }, SEGMENTOS, { sistemas: "HERUPU SISTEMAS", misto: "Marca em geral" });
@@ -608,7 +630,7 @@
         m.foco && m.foco !== "todos" ? el("span", { style: "position:absolute;left:3px;bottom:3px;font-size:10px;background:rgba(0,0,0,.75);color:#fff;padding:1px 5px;border-radius:6px", texto: (SEGMENTOS[m.foco] || "").split(" ")[0] }) : null,
         m.driveId ? el("span", { style: "position:absolute;right:3px;bottom:3px;font-size:10px;background:#1a73e8;color:#fff;padding:1px 5px;border-radius:6px", texto: "Drive" }) : null,
         m.pronta ? el("span", { style: "position:absolute;left:3px;top:3px;font-size:10px;background:#22c55e;color:#0b1020;padding:1px 5px;border-radius:6px;font-weight:700", texto: "pronta" }) : null,
-        m.tipo === "video" ? el("video", { src: m.url, muted: "", playsinline: "", preload: "metadata" }) : el("img", { src: m.url, alt: "", loading: "lazy" }),
+        m.tipo === "video" ? el("video", { src: m.url, muted: "", playsinline: "", preload: "metadata", controls: "" }) : el("img", { src: m.url, alt: "", loading: "lazy", style: "cursor:zoom-in", onclick: function () { verArtes([m], 0); } }),
         el("button", { type: "button", "aria-label": "Tirar modelo", texto: "×", onclick: function (ev) {
           if (!confirmarNoBotao(ev.target, "?")) return;
           api("modelo-excluir", { arquivo: m.arquivo }).then(carregar).catch(function (err) { aviso(err.message); });
