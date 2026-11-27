@@ -514,8 +514,9 @@
 
 
   // ------------------------------------------------------------ piloto automático
-  var NOMES_FOCO = { tecnicos: "Captar técnicos", clientes: "Captar clientes", solar: "Energia solar", sistemas: "HERUPU SISTEMAS", misto: "Marca em geral" };
-  var NOMES_FORMATO = { reels: "Reel (vídeo)", imagem: "Arte (imagem)", carrossel: "Carrossel" };
+  var SEGMENTOS = { tecnicos: "Captar técnicos", clientes: "Captar clientes", solar: "Energia solar", seguranca: "Segurança eletrônica", programacao: "Programação de sistemas" };
+  var NOMES_FOCO = Object.assign({ rodizio: "Rodízio dos segmentos" }, SEGMENTOS, { sistemas: "HERUPU SISTEMAS", misto: "Marca em geral" });
+  var NOMES_FORMATO = { ambos: "Arte + Reel", reels: "Só Reel", imagem: "Só arte", carrossel: "Carrossel" };
   function selecao(opcoes, valor) {
     var s = el("select");
     Object.keys(opcoes).forEach(function (k) { var o = el("option", { value: k, texto: opcoes[k] }); if (k === valor) o.selected = true; s.appendChild(o); });
@@ -524,7 +525,7 @@
   function linhaHorario(h) {
     var hora = el("input", { type: "time", value: h.hora || "12:00" });
     var linha = el("div", { classe: "mkt-horario", style: "display:grid;grid-template-columns:90px 1fr 1fr 36px;gap:6px;margin:6px 0;align-items:center" }, [
-      hora, selecao(NOMES_FORMATO, h.formato || "reels"), selecao(NOMES_FOCO, h.foco || "tecnicos"),
+      hora, selecao(NOMES_FORMATO, h.formato || "ambos"), selecao(NOMES_FOCO, h.foco || "rodizio"),
       el("button", { type: "button", classe: "botao", "aria-label": "Tirar horário", texto: "×", onclick: function () { linha.remove(); } })
     ]);
     return linha;
@@ -539,15 +540,24 @@
     $("pilotoTT").checked = c.redes.indexOf("tiktok") >= 0;
     var box = $("pilotoHorarios");
     if (!box.dataset.mexido) { box.textContent = ""; c.horarios.forEach(function (h) { box.appendChild(linhaHorario(h)); }); }
+    var rbox = $("pilotoRodizio");
+    if (!rbox.dataset.mexido) {
+      rbox.textContent = "";
+      Object.keys(SEGMENTOS).forEach(function (k) {
+        var cb = el("input", { type: "checkbox", value: k }); cb.checked = (c.rodizio || []).indexOf(k) >= 0;
+        rbox.appendChild(el("label", { classe: "linha-check" }, [cb, " " + SEGMENTOS[k]]));
+      });
+    }
+    var porDia = c.horarios.reduce(function (t, h) { return t + (h.formato === "ambos" ? 2 : 1); }, 0);
     var st = $("pilotoStatus"); st.textContent = "";
-    st.appendChild(el("span", { classe: c.ligado ? "ok" : "falta", texto: c.ligado ? "● Ligado: " + c.horarios.length + " posts por dia" : "○ Desligado" }));
+    st.appendChild(el("span", { classe: c.ligado ? "ok" : "falta", texto: c.ligado ? "● Ligado: " + porDia + " posts por dia em " + c.horarios.length + " horários" : "○ Desligado" }));
     if (pl.ocupado) st.appendChild(el("span", { texto: "  · montando um post agora…" }));
     else if (c.ligado && pl.vagas) st.appendChild(el("span", { texto: "  · " + pl.vagas + " na fila para montar (um a cada 10 min)" }));
     var fila = $("pilotoFila"); fila.textContent = "";
     if (!pl.fila.length) fila.appendChild(el("p", { classe: "nota", texto: c.ligado ? "Nada na fila ainda. O primeiro post fica pronto em poucos minutos." : "Ligue o piloto e salve." }));
     pl.fila.forEach(function (p) {
       fila.appendChild(el("div", { classe: "mkt-link" }, [
-        el("div", {}, [el("div", { texto: dataBonita(p.quando) + " · " + (NOMES_FORMATO[p.formato] || p.formato) }), el("div", { classe: "nota", texto: p.gancho || "" }),
+        el("div", {}, [el("div", { texto: dataBonita(p.quando) + " · " + ({ reels: "Reel", imagem: "Arte", carrossel: "Carrossel" }[p.formato] || p.formato) + " · " + (NOMES_FOCO[p.foco] || p.foco || "") }), el("div", { classe: "nota", texto: p.gancho || "" }),
           p.aviso ? el("div", { classe: "problemas", texto: p.aviso }) : null]),
         el("span", { classe: "selo selo-" + p.status, texto: NOMES_STATUS[p.status] || p.status })
       ]));
@@ -555,11 +565,12 @@
     var log = $("pilotoLog"); log.textContent = "";
     pl.log.forEach(function (l) { log.appendChild(el("li", { texto: dataBonita(l.em) + ": " + l.texto })); });
   }
+  $("pilotoRodizio").addEventListener("change", function () { $("pilotoRodizio").dataset.mexido = "1"; });
   $("pilotoHorarios").addEventListener("input", function () { $("pilotoHorarios").dataset.mexido = "1"; });
   $("pilotoHorarios").addEventListener("change", function () { $("pilotoHorarios").dataset.mexido = "1"; });
   $("btnMaisHorario").addEventListener("click", function () {
     $("pilotoHorarios").dataset.mexido = "1";
-    $("pilotoHorarios").appendChild(linhaHorario({ hora: "16:00", formato: "reels", foco: "tecnicos" }));
+    $("pilotoHorarios").appendChild(linhaHorario({ hora: "16:00", formato: "ambos", foco: "rodizio" }));
   });
   $("btnSalvarPiloto").addEventListener("click", function (e) {
     var redes = [];
@@ -570,9 +581,10 @@
       var c = l.querySelectorAll("input,select");
       return { hora: c[0].value, formato: c[1].value, foco: c[2].value };
     });
+    var rodizio = Array.prototype.filter.call($("pilotoRodizio").querySelectorAll("input"), function (x) { return x.checked; }).map(function (x) { return x.value; });
     var volta = ocupado(e.target, "Salvando…");
-    api("piloto", { ligado: $("pilotoLigado").checked, aprovacao: $("pilotoAprovacao").value, redes: redes, horarios: horarios }).then(function (pl) {
-      delete $("pilotoHorarios").dataset.mexido;
+    api("piloto", { ligado: $("pilotoLigado").checked, aprovacao: $("pilotoAprovacao").value, redes: redes, horarios: horarios, rodizio: rodizio }).then(function (pl) {
+      delete $("pilotoHorarios").dataset.mexido; delete $("pilotoRodizio").dataset.mexido;
       estado.piloto = pl; desenharPiloto();
       aviso(pl.config.ligado ? "✔ Piloto ligado. Ele monta os posts de hoje e amanhã sozinho, um a cada 10 minutos." : "Piloto salvo (desligado).");
     }).catch(function (err) { aviso(err.message); }).then(volta);
@@ -592,7 +604,8 @@
     var img = 0, vid = 0;
     (estado.modelos || []).forEach(function (m) {
       if (m.tipo === "video") vid++; else img++;
-      box.appendChild(el("figure", { title: m.nome + " · usado " + (m.usos || 0) + "x" }, [
+      box.appendChild(el("figure", { title: m.nome + " · " + (SEGMENTOS[m.foco] || "qualquer segmento") + " · usado " + (m.usos || 0) + "x" }, [
+        m.foco && m.foco !== "todos" ? el("span", { style: "position:absolute;left:3px;bottom:3px;font-size:10px;background:rgba(0,0,0,.75);color:#fff;padding:1px 5px;border-radius:6px", texto: (SEGMENTOS[m.foco] || "").split(" ")[0] }) : null,
         m.tipo === "video" ? el("video", { src: m.url, muted: "", playsinline: "", preload: "metadata" }) : el("img", { src: m.url, alt: "", loading: "lazy" }),
         el("button", { type: "button", "aria-label": "Tirar modelo", texto: "×", onclick: function (ev) {
           if (!confirmarNoBotao(ev.target, "?")) return;
@@ -608,7 +621,7 @@
     arqs.reduce(function (p, a) {
       return p.then(function () {
         $("notaModelos").textContent = "Enviando imagem " + (++n) + " de " + arqs.length + "…";
-        return prepararModelo(a).then(function (b64) { return api("modelo", { base64: b64, tipo: "image/jpeg", nome: a.name }); }).catch(function (err) { aviso(err.message); });
+        return prepararModelo(a).then(function (b64) { return api("modelo", { base64: b64, tipo: "image/jpeg", nome: a.name, foco: $("modeloFoco").value }); }).catch(function (err) { aviso(err.message); });
       });
     }, Promise.resolve()).then(carregar);
   });
@@ -635,7 +648,7 @@
         n++;
         return new Promise(function (ok) {
           var x = new XMLHttpRequest();
-          x.open("POST", "/api/mkt/modelo-video?nome=" + encodeURIComponent(f.name));
+          x.open("POST", "/api/mkt/modelo-video?nome=" + encodeURIComponent(f.name) + "&foco=" + encodeURIComponent($("modeloFoco").value));
           x.setRequestHeader("x-herupu-senha", senha);
           x.upload.onprogress = function (ev) { if (ev.lengthComputable) $("notaModelos").textContent = "Vídeo " + n + " de " + arqs.length + ": enviando " + Math.round(ev.loaded / ev.total * 100) + "%" + (ev.loaded === ev.total ? " · ajustando para 9:16…" : ""); };
           x.onload = function () {

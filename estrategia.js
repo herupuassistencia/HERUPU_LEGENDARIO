@@ -18,6 +18,10 @@ PRODUTOS DA HERUPU (o que estamos construindo para vender e captar):
    da CEA Equatorial (nunca prometer conta zerada; existe taxa mínima, Fio B e iluminação pública).
 4) HERUPU SISTEMAS: sistema de gestão online para malharias e comunicação visual, com a marca do cliente,
    teste grátis de 7 dias.
+5) HERUPU SEGURANÇA ELETRÔNICA: instalação e manutenção de câmeras (CFTV), alarmes, cerca elétrica, interfone e
+   controle de acesso para casas e empresas em Macapá e no Amapá. Orçamento pelo WhatsApp.
+6) HERUPU PROGRAMAÇÃO DE SISTEMAS: criação de sistemas, aplicativos, sites, automações e assistentes de IA sob medida
+   para empresas de qualquer lugar do Brasil (atendimento online). Orçamento pelo WhatsApp.
 Marca: leão HERUPU (mascote). Instagram @herupuassistencia, TikTok @jaeciojr. WhatsApp (96) 98415-3280.
 `;
 
@@ -42,7 +46,7 @@ COMO CONTEÚDO VIRALIZA (regras práticas para Instagram e TikTok):
 - Constância: 1 Reel por dia > 3 posts por semana. Responder TODO comentário na primeira hora.
 - ALCANCE NACIONAL: o app HERUPU (técnicos e clientes) atende TODO O BRASIL. Fale com o técnico de qualquer cidade.
   Varie as cidades e regiões citadas a cada post (ex.: São Paulo, Rio, BH, Salvador, Recife, Fortaleza, Manaus, Belém, Goiânia,
-  Curitiba, Porto Alegre, interior de SP/MG/PR, Nordeste, Norte), sem concentrar em Macapá. Macapá e Amapá só nos posts de energia solar.
+  Curitiba, Porto Alegre, interior de SP/MG/PR, Nordeste, Norte), sem concentrar em Macapá. Macapá e Amapá só nos posts de energia solar e de segurança eletrônica.
 - Hashtags: profissão + tema + 1 de alcance nacional (ex.: #eletricista #tecnicodearcondicionado #prestadordeservico #autonomo #brasil #herupu);
   hashtag de cidade só quando o post citar a cidade. Nada de #viral/#fyp.
 - Nunca inventar números, preços como regra oficial, depoimentos ou promessas. Preço de serviço sempre como

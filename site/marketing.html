@@ -79,6 +79,9 @@
         <label>Horários do dia (Brasília)</label>
         <div id="pilotoHorarios"></div>
         <button type="button" class="botao largo mkt-discreto" id="btnMaisHorario">+ HORÁRIO</button>
+        <label>Segmentos do rodízio</label>
+        <div class="mkt-redes" id="pilotoRodizio"></div>
+        <p class="nota">Em "Rodízio", cada horário pega o próximo segmento da lista; no dia seguinte a lista continua de onde parou. Em "Arte + Reel", o Reel sai no horário (Instagram, Facebook e TikTok) e a arte 5 minutos depois (Instagram e Facebook).</p>
         <button type="button" class="botao principal largo" id="btnSalvarPiloto">SALVAR PILOTO</button>
         <button type="button" class="botao largo" id="btnPilotoAgora">✦ CRIAR O PRÓXIMO POST AGORA</button>
         <h3 class="titulo-secao">PRÓXIMOS DO PILOTO</h3>
@@ -89,6 +92,15 @@
         <h2 class="titulo-secao">MEUS MODELOS (FUNDOS)</h2>
         <p class="nota">Envie as imagens e os vídeos que vocês já criaram (Gemini, Flow, Canva, fotos reais). O piloto usa um modelo diferente a cada post como fundo, com texto, chamada e narração sempre novos. Assim nada sai repetido.</p>
         <div class="mkt-midias" id="listaModelos"></div>
+        <label for="modeloFoco">Estes modelos são de</label>
+        <select id="modeloFoco">
+          <option value="todos">Qualquer segmento (marca HERUPU)</option>
+          <option value="tecnicos">Captação de técnicos</option>
+          <option value="clientes">Captação de clientes</option>
+          <option value="solar">Energia solar</option>
+          <option value="seguranca">Segurança eletrônica</option>
+          <option value="programacao">Programação de sistemas</option>
+        </select>
         <div class="mkt-botoes">
           <label class="botao mkt-upload">+ IMAGENS<input type="file" id="modeloImagens" accept="image/*" multiple hidden></label>
           <label class="botao mkt-upload">+ VÍDEOS<input type="file" id="modeloVideos" accept="video/*" multiple hidden></label>
@@ -112,6 +124,8 @@
           <option value="tecnicos">Captar técnicos (app HERUPU Técnico)</option>
           <option value="clientes">Captar clientes (app HERUPU Cliente)</option>
           <option value="solar">Energia solar (Macapá e Amapá)</option>
+          <option value="seguranca">Segurança eletrônica</option>
+          <option value="programacao">Programação de sistemas</option>
           <option value="sistemas">HERUPU SISTEMAS (malharias e comunicação visual)</option>
           <option value="misto">Marca em geral</option>
         </select>
