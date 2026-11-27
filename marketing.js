@@ -667,15 +667,16 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
 
   // ------------------------------------------------------------ banco de modelos (imagens e vídeos que o Aécio já criou)
   db.modelos = db.modelos || [];
-  function registrarModelo(arquivo, nome, tipo, foco) {
-    const m = { arquivo, url: "/midia/" + arquivo, tipo, nome: String(nome || "").slice(0, 80), foco: FOCOS[foco] ? foco : "todos", usos: 0, criadoEm: new Date().toISOString() };
+  // pronta = arte que já tem texto (entra inteira como cena do Reel, nunca recebe texto por cima)
+  function registrarModelo(arquivo, nome, tipo, foco, pronta) {
+    const m = { arquivo, url: "/midia/" + arquivo, tipo, nome: String(nome || "").slice(0, 80), foco: FOCOS[foco] ? foco : "todos", pronta: Boolean(pronta) && tipo === "imagem", usos: 0, criadoEm: new Date().toISOString() };
     db.modelos.push(m); salvar();
     return m;
   }
   // escolhe o modelo menos usado (sorteio entre os empatados), para variar o fundo a cada post
   // modelos marcados com o segmento do post vêm primeiro; depois os de "todos". Nunca usa modelo de outro segmento.
-  function escolherModelo(tipo, foco) {
-    const ok = (m) => m.tipo === tipo && fs.existsSync(path.join(DIR_MIDIA, m.arquivo));
+  function escolherModelo(tipo, foco, pronta = false) {
+    const ok = (m) => m.tipo === tipo && Boolean(m.pronta) === pronta && fs.existsSync(path.join(DIR_MIDIA, m.arquivo));
     let lista = db.modelos.filter((m) => ok(m) && foco && m.foco === foco);
     if (!lista.length) lista = db.modelos.filter((m) => ok(m) && (m.foco || "todos") === "todos");
     if (!lista.length) return null;
@@ -702,7 +703,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-movflags", "+faststart", destino], { timeout: 300000 }, (e) => {
         fs.rm(bruto, () => {});
         if (e) { fs.rm(destino, () => {}); return enviarJson(res, 400, { erro: "Não consegui abrir esse vídeo. Envie em MP4 ou MOV." }); }
-        enviarJson(res, 200, registrarModelo(arq, nomeOriginal, "video", focoModelo));
+        enviarJson(res, 200, registrarModelo(arq, nomeOriginal, "video", focoModelo, false));
       });
     });
   }
@@ -782,6 +783,9 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
         const m = escolherModelo("video", v.foco) || escolherModelo("imagem", v.foco);
         return m ? Object.assign({}, c, { modelo: { arquivo: m.arquivo, inicio: m.tipo === "video" ? Math.random() * 20 : 0 } }) : c;
       });
+      // uma arte pronta do segmento entra inteira antes do Leão fechar (vitrine do que já foi aprovado)
+      const pronta = escolherModelo("imagem", v.foco, true);
+      if (pronta) cenas.splice(Math.max(cenas.length - 1, 1), 0, { tela: "", fala: "", modelo: { arquivo: pronta.arquivo, inteira: true } });
       await montarReel(p, { cenas });
     } else {
       const roteiro = roteiroDe(p);
@@ -953,7 +957,7 @@ module.exports = function criarMarketing({ chamarCerebro, enviarJson, lerCorpo, 
     }
     if (url === "/api/mkt/modelo") {
       const m = salvarMidia(String(corpo.base64 || ""), String(corpo.tipo || ""));
-      return enviarJson(res, 200, registrarModelo(m.arquivo, corpo.nome, "imagem", corpo.foco));
+      return enviarJson(res, 200, registrarModelo(m.arquivo, corpo.nome, "imagem", corpo.foco, corpo.pronta === true));
     }
     if (url === "/api/mkt/modelo-excluir") { db.modelos = db.modelos.filter((m) => m.arquivo !== String(corpo.arquivo || "")); salvar(); return enviarJson(res, 200, { ok: true }); }
     if (url === "/api/mkt/tiktok/chaves") { tiktok.salvarChaves(corpo); return enviarJson(res, 200, tiktok.estado()); }

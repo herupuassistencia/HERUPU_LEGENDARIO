@@ -201,6 +201,19 @@ module.exports = function criarEstudio({ DIR_MIDIA, falarMp3 }) {
           "-c:a", "aac", "-ar", "44100", "-ac", "2", "-b:a", "128k", seg]);
         partes.push(seg); continue;
       }
+      // arte pronta (já tem texto): aparece inteira sobre um fundo desfocado dela mesma, sem texto por cima
+      if (c.modelo && c.modelo.inteira && fs.existsSync(path.join(DIR_MIDIA, c.modelo.arquivo))) {
+        const arteP = path.join(DIR_MIDIA, c.modelo.arquivo);
+        let dur = 3.2, temVoz = false;
+        if (c.fala) { try { fs.writeFileSync(voz, await falarMp3(c.fala)); dur = Math.max(dur, (await duracao(voz)) + 0.35); temVoz = true; } catch { /* sem voz */ } }
+        const fr = Math.ceil(dur * 30);
+        await rodar(["-loop", "1", "-i", arteP, ...(temVoz ? ["-i", voz] : ["-f", "lavfi", "-t", String(dur), "-i", "anullsrc=r=44100:cl=stereo"]), "-filter_complex",
+          `[0:v]split[a][b];[a]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=30:3,eq=brightness=-0.15[f];` +
+          `[b]scale=1000:1780:force_original_aspect_ratio=decrease[p];[f][p]overlay=(W-w)/2:(H-h)/2,scale=2160:3840,` +
+          `zoompan=z='min(zoom+0.0007,1.05)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${fr}:s=1080x1920:fps=30,format=yuv420p[v];[1:a]apad[au]`,
+          "-map", "[v]", "-map", "[au]", "-t", dur.toFixed(2), "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-c:a", "aac", "-ar", "44100", "-ac", "2", "-b:a", "128k", seg]);
+        partes.push(seg); continue;
+      }
       const ehApp = /^app_/.test(c.tipo || "");
       const doModelo = !ehApp && c.modelo && fs.existsSync(path.join(DIR_MIDIA, c.modelo.arquivo))
         ? { tipo: /\.mp4$/.test(c.modelo.arquivo) ? "video" : "foto", arq: path.join(DIR_MIDIA, c.modelo.arquivo), inicio: Number(c.modelo.inicio) || 0 } : null;

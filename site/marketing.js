@@ -601,11 +601,12 @@
   // ------------------------------------------------------------ modelos
   function desenharModelos() {
     var box = $("listaModelos"); box.textContent = "";
-    var img = 0, vid = 0;
+    var img = 0, vid = 0, prontas = 0;
     (estado.modelos || []).forEach(function (m) {
-      if (m.tipo === "video") vid++; else img++;
+      if (m.tipo === "video") vid++; else if (m.pronta) prontas++; else img++;
       box.appendChild(el("figure", { title: m.nome + " · " + (SEGMENTOS[m.foco] || "qualquer segmento") + " · usado " + (m.usos || 0) + "x" }, [
         m.foco && m.foco !== "todos" ? el("span", { style: "position:absolute;left:3px;bottom:3px;font-size:10px;background:rgba(0,0,0,.75);color:#fff;padding:1px 5px;border-radius:6px", texto: (SEGMENTOS[m.foco] || "").split(" ")[0] }) : null,
+        m.pronta ? el("span", { style: "position:absolute;left:3px;top:3px;font-size:10px;background:#22c55e;color:#0b1020;padding:1px 5px;border-radius:6px;font-weight:700", texto: "pronta" }) : null,
         m.tipo === "video" ? el("video", { src: m.url, muted: "", playsinline: "", preload: "metadata" }) : el("img", { src: m.url, alt: "", loading: "lazy" }),
         el("button", { type: "button", "aria-label": "Tirar modelo", texto: "×", onclick: function (ev) {
           if (!confirmarNoBotao(ev.target, "?")) return;
@@ -613,7 +614,7 @@
         } })
       ]));
     });
-    $("notaModelos").textContent = img + " imagens e " + vid + " vídeos. " + (img + vid ? "" : "Sem modelos, o piloto usa as artes da HERUPU e os vídeos do Pexels.");
+    $("notaModelos").textContent = img + " fundos, " + prontas + " artes prontas e " + vid + " vídeos. " + (img + vid ? "" : "Sem modelos, o piloto usa as artes da HERUPU e os vídeos do Pexels.");
   }
   $("modeloImagens").addEventListener("change", function (e) {
     var arqs = Array.prototype.slice.call(e.target.files || [], 0, 30); e.target.value = "";
@@ -621,7 +622,7 @@
     arqs.reduce(function (p, a) {
       return p.then(function () {
         $("notaModelos").textContent = "Enviando imagem " + (++n) + " de " + arqs.length + "…";
-        return prepararModelo(a).then(function (b64) { return api("modelo", { base64: b64, tipo: "image/jpeg", nome: a.name, foco: $("modeloFoco").value }); }).catch(function (err) { aviso(err.message); });
+        return prepararModelo(a).then(function (b64) { return api("modelo", { base64: b64, tipo: "image/jpeg", nome: a.name, foco: $("modeloFoco").value, pronta: $("modeloPronta").checked }); }).catch(function (err) { aviso(err.message); });
       });
     }, Promise.resolve()).then(carregar);
   });
